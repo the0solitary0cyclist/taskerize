@@ -30,6 +30,9 @@ const TOKEN_FILE = path.join(
   '.taskerize-tokens.json'
 );
 
+const TASK_FIELDS =
+  'folder,context,goal,location,tag,status,priority,length,star,duedate,startdate,repeat,duedatemod';
+
 type Tokens = {
   access_token: string;
   refresh_token: string;
@@ -193,8 +196,7 @@ async function toodledoGet(
     }
   );
 
-  const response =
-    await fetch(url);
+  const response = await fetch(url);
 
   if (!response.ok) {
     const text = await response.text();
@@ -204,8 +206,7 @@ async function toodledoGet(
     );
   }
 
-  const data =
-    await response.json();
+  const data = await response.json();
 
   if (data?.errorCode) {
     throw new Error(
@@ -230,20 +231,19 @@ async function toodledoPost(
       ...params
     });
 
-  const response =
-    await fetch(
-      `https://api.toodledo.com/3/${endpoint}`,
-      {
-        method: 'POST',
+  const response = await fetch(
+    `https://api.toodledo.com/3/${endpoint}`,
+    {
+      method: 'POST',
 
-        headers: {
-          'Content-Type':
-            'application/x-www-form-urlencoded'
-        },
+      headers: {
+        'Content-Type':
+          'application/x-www-form-urlencoded'
+      },
 
-        body
-      }
-    );
+      body
+    }
+  );
 
   if (!response.ok) {
     const text = await response.text();
@@ -253,8 +253,7 @@ async function toodledoPost(
     );
   }
 
-  const data =
-    await response.json();
+  const data = await response.json();
 
   if (data?.errorCode) {
     throw new Error(
@@ -264,6 +263,189 @@ async function toodledoPost(
   }
 
   return data;
+}
+
+/*
+ * Keep:
+ *
+ * - overdue tasks
+ * - tasks due today
+ * - tasks with no due date
+ *
+ * Exclude tasks due after today.
+ */
+function isNotFutureTask(
+  task: ToodledoTask
+): boolean {
+  if (!task.duedate) {
+    return true;
+  }
+
+  const dueDate = new Date(
+    task.duedate * 1000
+  );
+
+  const today = new Date();
+
+  /*
+   * Compare local calendar dates rather
+   * than precise timestamps.
+   */
+  const dueDay = new Date(
+    dueDate.getFullYear(),
+    dueDate.getMonth(),
+    dueDate.getDate()
+  );
+
+  const todayDay = new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate()
+  );
+
+  return (
+    dueDay.getTime() <=
+    todayDay.getTime()
+  );
+}
+
+/*
+ * Toodledo returns at most 1000 tasks per
+ * tasks/get.php request.
+ *
+ * We must page through ALL incomplete tasks,
+ * because useful overdue/today tasks might
+ * occur after the first 1000 results.
+ *
+ * Future tasks are discarded as each page
+ * is processed.
+ */
+async function getAllCurrentTasks():
+  Promise<ToodledoTask[]> {
+  const relevantTasks:
+    ToodledoTask[] = [];
+
+  const pageSize = 1000;
+
+  let start = 0;
+  let total: number | null = null;
+
+  while (
+    total === null ||
+    start < total
+  ) {
+    const rawTasks =
+      await toodledoGet(
+        'tasks/get.php',
+        {
+          comp: '0',
+          start:
+            String(start),
+          num:
+            String(pageSize),
+          fields:
+            TASK_FIELDS
+        }
+      );
+
+    if (
+      !Array.isArray(rawTasks)
+    ) {
+      throw new Error(
+        'Unexpected response from Toodledo task API.'
+      );
+    }
+
+    /*
+     * The first result is Toodledo metadata.
+     */
+    const metadata =
+      rawTasks[0] as {
+        num?: number;
+        total?: number;
+      };
+
+    if (
+      typeof metadata?.total ===
+      'number'
+    ) {
+      total =
+        metadata.total;
+    }
+
+    const pageTasks = (
+      rawTasks as unknown[]
+    ).filter(
+      (item: any) =>
+        item &&
+        typeof item.id ===
+          'number'
+    ) as ToodledoTask[];
+
+    const relevantPageTasks =
+      pageTasks.filter(
+        isNotFutureTask
+      );
+
+    relevantTasks.push(
+      ...relevantPageTasks
+    );
+
+    console.log(
+      'Toodledo task page',
+      {
+        start,
+        returned:
+          pageTasks.length,
+        relevant:
+          relevantPageTasks.length,
+        total,
+        relevantSoFar:
+          relevantTasks.length
+      }
+    );
+
+    /*
+     * If no actual tasks came back,
+     * stop rather than risk looping.
+     */
+    if (
+      pageTasks.length === 0
+    ) {
+      break;
+    }
+
+    /*
+     * Advance by the number of API records
+     * requested, not the number retained.
+     */
+    start += pageSize;
+
+    /*
+     * If the API did not provide a total,
+     * a short page means we've reached
+     * the end.
+     */
+    if (
+      total === null &&
+      pageTasks.length <
+        pageSize
+    ) {
+      break;
+    }
+  }
+
+  console.log(
+    'Taskerize task load complete',
+    {
+      totalIncomplete:
+        total,
+      currentTasks:
+        relevantTasks.length
+    }
+  );
+
+  return relevantTasks;
 }
 
 /*
@@ -457,7 +639,7 @@ app.get(
         contexts,
         goals,
         locations,
-        rawTasks
+        tasks
       ] =
         await Promise.all([
           toodledoGet(
@@ -476,36 +658,13 @@ app.get(
             'locations/get.php'
           ),
 
-          toodledoGet(
-            'tasks/get.php',
-            {
-              comp: '0',
-
-              num: '1000',
-
-              fields:
-                'folder,context,goal,location,tag,status,priority,length,star,duedate,startdate,repeat,duedatemod'
-            }
-          )
+          getAllCurrentTasks()
         ]);
 
       /*
-       * The Toodledo response may include
-       * metadata along with actual task objects.
-       */
-      const tasks = (
-        rawTasks as unknown[]
-      ).filter(
-        (item: any) =>
-          item &&
-          typeof item.id ===
-            'number'
-      ) as ToodledoTask[];
-
-      /*
-       * Tags don't have their own endpoint,
-       * so derive the available tags from
-       * active tasks.
+       * Tags do not have their own API
+       * endpoint, so derive them from the
+       * tasks available to Taskerize.
        */
       const tags = [
         ...new Set(
@@ -569,21 +728,18 @@ app.post(
       }
 
       /*
-       * Fetch the task directly from Toodledo
-       * immediately before completing it.
-       *
-       * This gives us current recurrence and
-       * due-date information instead of relying
-       * on potentially stale frontend data.
+       * Fetch the current task directly
+       * from Toodledo before editing it.
        */
       const rawTasks =
         await toodledoGet(
           'tasks/get.php',
           {
-            id: String(id),
+            id:
+              String(id),
 
             fields:
-              'folder,context,goal,location,tag,status,priority,length,star,duedate,startdate,repeat,duedatemod'
+              TASK_FIELDS
           }
         );
 
@@ -630,16 +786,8 @@ app.post(
         );
 
       /*
-       * IMPORTANT:
-       *
-       * reschedule belongs inside the task
-       * edit object.
-       *
-       * For a repeating task such as
-       * FREQ=DAILY, Toodledo should advance
-       * the task to its next occurrence while
-       * preserving the completed occurrence
-       * in its history.
+       * reschedule must be part of the
+       * individual task edit object.
        */
       const result =
         await toodledoPost(
@@ -655,15 +803,13 @@ app.post(
               ]),
 
             fields:
-              'folder,context,goal,location,tag,status,priority,length,star,duedate,startdate,repeat,duedatemod'
+              TASK_FIELDS
           }
         );
 
       console.log(
         'Toodledo completion result',
-        JSON.stringify(
-          result
-        )
+        JSON.stringify(result)
       );
 
       res.json(result);
@@ -698,10 +844,6 @@ app.use(
 
 /*
  * Frontend fallback.
- *
- * app.get('*') is deliberately avoided
- * because the newer path-to-regexp used
- * by Express rejects a bare wildcard.
  */
 app.use(
   (req, res, next) => {

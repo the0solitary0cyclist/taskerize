@@ -5,33 +5,64 @@ import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import cookieParser from 'cookie-parser';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __filename =
+  fileURLToPath(import.meta.url);
 
-const appRoot = path.resolve(__dirname, '../..');
+const __dirname =
+  path.dirname(__filename);
 
-const app = express();
+const appRoot =
+  path.resolve(
+    __dirname,
+    '../..'
+  );
 
-app.use(cookieParser());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+const app =
+  express();
 
-const PORT = Number(process.env.PORT || 3001);
-
-const CLIENT_ID = process.env.TOODLEDO_CLIENT_ID || '';
-const CLIENT_SECRET = process.env.TOODLEDO_CLIENT_SECRET || '';
-
-const REDIRECT_URI =
-  process.env.TOODLEDO_REDIRECT_URI ||
-  `http://localhost:${PORT}/api/auth/callback`;
-
-const TOKEN_FILE = path.join(
-  appRoot,
-  '.taskerize-tokens.json'
+app.use(
+  cookieParser()
 );
 
+app.use(
+  express.json()
+);
+
+app.use(
+  express.urlencoded({
+    extended: true
+  })
+);
+
+const PORT =
+  Number(
+    process.env.PORT ||
+      3001
+  );
+
+const CLIENT_ID =
+  process.env
+    .TOODLEDO_CLIENT_ID ||
+  '';
+
+const CLIENT_SECRET =
+  process.env
+    .TOODLEDO_CLIENT_SECRET ||
+  '';
+
+const REDIRECT_URI =
+  process.env
+    .TOODLEDO_REDIRECT_URI ||
+  `http://localhost:${PORT}/api/auth/callback`;
+
+const TOKEN_FILE =
+  path.join(
+    appRoot,
+    '.taskerize-tokens.json'
+  );
+
 const TASK_FIELDS =
-  'folder,context,goal,location,tag,status,priority,length,star,duedate,startdate,repeat,duedatemod';
+  'folder,context,goal,location,tag,status,priority,length,star,duedate,duetime,startdate,repeat,duedatemod';
 
 type Tokens = {
   access_token: string;
@@ -58,16 +89,21 @@ type ToodledoTask = {
   star?: number;
 
   duedate?: number;
+  duetime?: number;
   startdate?: number;
 
   repeat?: string;
   duedatemod?: number;
 };
 
-function readTokens(): Tokens | null {
+function readTokens():
+  Tokens | null {
   try {
     return JSON.parse(
-      fs.readFileSync(TOKEN_FILE, 'utf8')
+      fs.readFileSync(
+        TOKEN_FILE,
+        'utf8'
+      )
     ) as Tokens;
   } catch {
     return null;
@@ -75,17 +111,29 @@ function readTokens(): Tokens | null {
 }
 
 function writeTokens(
-  tokens: Omit<Tokens, 'obtained_at'> | Tokens
+  tokens:
+    | Omit<
+        Tokens,
+        'obtained_at'
+      >
+    | Tokens
 ): Tokens {
   const withTimestamp = {
     ...tokens,
-    obtained_at: Date.now()
+    obtained_at:
+      Date.now()
   } as Tokens;
 
   fs.writeFileSync(
     TOKEN_FILE,
-    JSON.stringify(withTimestamp, null, 2),
-    { mode: 0o600 }
+    JSON.stringify(
+      withTimestamp,
+      null,
+      2
+    ),
+    {
+      mode: 0o600
+    }
   );
 
   return withTimestamp;
@@ -94,42 +142,60 @@ function writeTokens(
 async function exchangeToken(
   params: URLSearchParams
 ): Promise<Tokens> {
-  if (!CLIENT_ID || !CLIENT_SECRET) {
+  if (
+    !CLIENT_ID ||
+    !CLIENT_SECRET
+  ) {
     throw new Error(
       'Missing Toodledo client credentials.'
     );
   }
 
-  const auth = Buffer.from(
-    `${CLIENT_ID}:${CLIENT_SECRET}`
-  ).toString('base64');
+  const auth =
+    Buffer.from(
+      `${CLIENT_ID}:${CLIENT_SECRET}`
+    ).toString(
+      'base64'
+    );
 
-  const response = await fetch(
-    'https://api.toodledo.com/3/account/token.php',
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Basic ${auth}`,
-        'Content-Type':
-          'application/x-www-form-urlencoded'
-      },
-      body: params
-    }
-  );
+  const response =
+    await fetch(
+      'https://api.toodledo.com/3/account/token.php',
+      {
+        method:
+          'POST',
+
+        headers: {
+          Authorization:
+            `Basic ${auth}`,
+
+          'Content-Type':
+            'application/x-www-form-urlencoded'
+        },
+
+        body:
+          params
+      }
+    );
 
   if (!response.ok) {
-    const text = await response.text();
+    const text =
+      await response.text();
 
     throw new Error(
       `Token exchange failed (${response.status}): ${text}`
     );
   }
 
-  const data = (await response.json()) as
-    Omit<Tokens, 'obtained_at'> & {
-      error?: string;
-      error_description?: string;
-    };
+  const data =
+    (await response.json()) as
+      Omit<
+        Tokens,
+        'obtained_at'
+      > & {
+        error?: string;
+        error_description?: string;
+      };
 
   if (data.error) {
     throw new Error(
@@ -138,11 +204,15 @@ async function exchangeToken(
     );
   }
 
-  return writeTokens(data);
+  return writeTokens(
+    data
+  );
 }
 
-async function getAccessToken(): Promise<string> {
-  const tokens = readTokens();
+async function getAccessToken():
+  Promise<string> {
+  const tokens =
+    readTokens();
 
   if (!tokens) {
     throw new Error(
@@ -152,41 +222,61 @@ async function getAccessToken(): Promise<string> {
 
   const expiresAt =
     tokens.obtained_at +
-    (tokens.expires_in - 60) * 1000;
+    (
+      tokens.expires_in -
+      60
+    ) *
+      1000;
 
-  if (Date.now() < expiresAt) {
+  if (
+    Date.now() <
+    expiresAt
+  ) {
     return tokens.access_token;
   }
 
-  const refreshed = await exchangeToken(
-    new URLSearchParams({
-      grant_type: 'refresh_token',
-      refresh_token:
-        tokens.refresh_token
-    })
-  );
+  const refreshed =
+    await exchangeToken(
+      new URLSearchParams({
+        grant_type:
+          'refresh_token',
+
+        refresh_token:
+          tokens.refresh_token
+      })
+    );
 
   return refreshed.access_token;
 }
 
 async function toodledoGet(
   endpoint: string,
-  params: Record<string, string> = {}
+  params:
+    Record<
+      string,
+      string
+    > = {}
 ) {
   const accessToken =
     await getAccessToken();
 
-  const url = new URL(
-    `https://api.toodledo.com/3/${endpoint}`
-  );
+  const url =
+    new URL(
+      `https://api.toodledo.com/3/${endpoint}`
+    );
 
   url.searchParams.set(
     'access_token',
     accessToken
   );
 
-  Object.entries(params).forEach(
-    ([key, value]) => {
+  Object.entries(
+    params
+  ).forEach(
+    ([
+      key,
+      value
+    ]) => {
       url.searchParams.set(
         key,
         value
@@ -194,19 +284,24 @@ async function toodledoGet(
     }
   );
 
-  const response = await fetch(url);
+  const response =
+    await fetch(url);
 
   if (!response.ok) {
-    const text = await response.text();
+    const text =
+      await response.text();
 
     throw new Error(
       `Toodledo request failed (${response.status}): ${text}`
     );
   }
 
-  const data = await response.json();
+  const data =
+    await response.json();
 
-  if (data?.errorCode) {
+  if (
+    data?.errorCode
+  ) {
     throw new Error(
       data.errorDesc ||
         'Toodledo API error'
@@ -218,40 +313,53 @@ async function toodledoGet(
 
 async function toodledoPost(
   endpoint: string,
-  params: Record<string, string>
+  params: Record<
+    string,
+    string
+  >
 ) {
   const accessToken =
     await getAccessToken();
 
   const body =
     new URLSearchParams({
-      access_token: accessToken,
+      access_token:
+        accessToken,
+
       ...params
     });
 
-  const response = await fetch(
-    `https://api.toodledo.com/3/${endpoint}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type':
-          'application/x-www-form-urlencoded'
-      },
-      body
-    }
-  );
+  const response =
+    await fetch(
+      `https://api.toodledo.com/3/${endpoint}`,
+      {
+        method:
+          'POST',
+
+        headers: {
+          'Content-Type':
+            'application/x-www-form-urlencoded'
+        },
+
+        body
+      }
+    );
 
   if (!response.ok) {
-    const text = await response.text();
+    const text =
+      await response.text();
 
     throw new Error(
       `Toodledo request failed (${response.status}): ${text}`
     );
   }
 
-  const data = await response.json();
+  const data =
+    await response.json();
 
-  if (data?.errorCode) {
+  if (
+    data?.errorCode
+  ) {
     throw new Error(
       data.errorDesc ||
         'Toodledo API error'
@@ -262,65 +370,108 @@ async function toodledoPost(
 }
 
 /*
- * Keep:
+ * Convert a Toodledo due-date timestamp
+ * into a local calendar day.
  *
- * - overdue tasks
- * - tasks due today
- * - tasks with no due date
- *
- * Exclude tasks due after today.
+ * We compare calendar dates rather than
+ * exact timestamps because Taskerize's
+ * due-date filters are date based.
  */
-function isNotFutureTask(
-  task: ToodledoTask
-): boolean {
-  if (!task.duedate) {
-    return true;
-  }
+function calendarDay(
+  timestamp: number
+): Date {
+  const date =
+    new Date(
+      timestamp * 1000
+    );
 
-  const dueDate = new Date(
-    task.duedate * 1000
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate()
   );
+}
 
-  const today = new Date();
+function todayDay():
+  Date {
+  const today =
+    new Date();
 
-  const dueDay = new Date(
-    dueDate.getFullYear(),
-    dueDate.getMonth(),
-    dueDate.getDate()
-  );
-
-  const todayDay = new Date(
+  return new Date(
     today.getFullYear(),
     today.getMonth(),
     today.getDate()
   );
+}
+
+/*
+ * Taskerize currently downloads only:
+ *
+ * - tasks with no due date
+ * - overdue tasks
+ * - tasks due today
+ *
+ * Future-dated tasks are excluded.
+ *
+ * duedatemod is preserved and sent to
+ * the frontend so the UI can distinguish:
+ *
+ * 0 = Due By
+ * 1 = Due On
+ * 2 = Due After
+ * 3 = Optionally On
+ *
+ * Note that a past "Due After" date is
+ * still eligible: the date marks when
+ * the task becomes available.
+ */
+function isNotFutureTask(
+  task: ToodledoTask
+): boolean {
+  if (
+    !task.duedate
+  ) {
+    return true;
+  }
+
+  const dueDay =
+    calendarDay(
+      task.duedate
+    );
+
+  const today =
+    todayDay();
 
   return (
     dueDay.getTime() <=
-    todayDay.getTime()
+    today.getTime()
   );
 }
 
 /*
  * Toodledo returns at most 1000 tasks
- * in one tasks/get.php request.
+ * from a tasks/get.php request.
  *
- * We therefore page through every
- * incomplete task and keep only:
- *
- * - overdue
- * - due today
- * - undated
+ * We page through every incomplete task
+ * so relevant tasks cannot disappear just
+ * because they occur after the first
+ * 1000 API results.
  */
 async function getAllCurrentTasks():
-  Promise<ToodledoTask[]> {
+  Promise<
+    ToodledoTask[]
+  > {
   const relevantTasks:
     ToodledoTask[] = [];
 
-  const pageSize = 1000;
+  const pageSize =
+    1000;
 
   let start = 0;
-  let total: number | null = null;
+
+  let total:
+    number | null =
+    null;
 
   while (
     total === null ||
@@ -330,18 +481,28 @@ async function getAllCurrentTasks():
       await toodledoGet(
         'tasks/get.php',
         {
-          comp: '0',
+          comp:
+            '0',
+
           start:
-            String(start),
+            String(
+              start
+            ),
+
           num:
-            String(pageSize),
+            String(
+              pageSize
+            ),
+
           fields:
             TASK_FIELDS
         }
       );
 
     if (
-      !Array.isArray(rawTasks)
+      !Array.isArray(
+        rawTasks
+      )
     ) {
       throw new Error(
         'Unexpected response from Toodledo task API.'
@@ -355,21 +516,26 @@ async function getAllCurrentTasks():
       };
 
     if (
-      typeof metadata?.total ===
+      typeof metadata
+        ?.total ===
       'number'
     ) {
       total =
         metadata.total;
     }
 
-    const pageTasks = (
-      rawTasks as unknown[]
-    ).filter(
-      (item: any) =>
-        item &&
-        typeof item.id ===
-          'number'
-    ) as ToodledoTask[];
+    const pageTasks =
+      (
+        rawTasks as
+          unknown[]
+      ).filter(
+        (
+          item: any
+        ) =>
+          item &&
+          typeof item.id ===
+            'number'
+      ) as ToodledoTask[];
 
     const relevantPageTasks =
       pageTasks.filter(
@@ -384,23 +550,29 @@ async function getAllCurrentTasks():
       'Toodledo task page',
       {
         start,
+
         returned:
           pageTasks.length,
+
         relevant:
           relevantPageTasks.length,
+
         total,
+
         relevantSoFar:
           relevantTasks.length
       }
     );
 
     if (
-      pageTasks.length === 0
+      pageTasks.length ===
+      0
     ) {
       break;
     }
 
-    start += pageSize;
+    start +=
+      pageSize;
 
     if (
       total === null &&
@@ -416,6 +588,7 @@ async function getAllCurrentTasks():
     {
       totalIncomplete:
         total,
+
       currentTasks:
         relevantTasks.length
     }
@@ -426,8 +599,11 @@ async function getAllCurrentTasks():
 
 /*
  * Convert a local calendar date into
- * the noon-UTC Unix timestamp format
- * expected by Toodledo for due dates.
+ * the date timestamp used when sending
+ * a due date back to Toodledo.
+ *
+ * Using noon UTC keeps us well away
+ * from midnight/time-zone boundaries.
  */
 function toToodledoDate(
   date: Date
@@ -453,7 +629,9 @@ app.get(
   (_req, res) => {
     res.json({
       connected:
-        Boolean(readTokens()),
+        Boolean(
+          readTokens()
+        ),
 
       configured:
         Boolean(
@@ -467,7 +645,9 @@ app.get(
 app.get(
   '/api/auth/login',
   (_req, res) => {
-    if (!CLIENT_ID) {
+    if (
+      !CLIENT_ID
+    ) {
       return res
         .status(500)
         .send(
@@ -475,27 +655,41 @@ app.get(
         );
     }
 
-    const state = crypto
-      .randomBytes(24)
-      .toString('hex');
+    const state =
+      crypto
+        .randomBytes(
+          24
+        )
+        .toString(
+          'hex'
+        );
 
     res.cookie(
       'toodledo_oauth_state',
       state,
       {
-        httpOnly: true,
+        httpOnly:
+          true,
+
         secure:
-          process.env.NODE_ENV ===
+          process.env
+            .NODE_ENV ===
           'production',
-        sameSite: 'lax',
+
+        sameSite:
+          'lax',
+
         maxAge:
-          10 * 60 * 1000
+          10 *
+          60 *
+          1000
       }
     );
 
-    const url = new URL(
-      'https://api.toodledo.com/3/account/authorize.php'
-    );
+    const url =
+      new URL(
+        'https://api.toodledo.com/3/account/authorize.php'
+      );
 
     url.searchParams.set(
       'response_type',
@@ -525,15 +719,21 @@ app.get(
 
 app.get(
   '/api/auth/callback',
-  async (req, res) => {
+  async (
+    req,
+    res
+  ) => {
     try {
-      const code = String(
-        req.query.code || ''
-      );
+      const code =
+        String(
+          req.query.code ||
+            ''
+        );
 
       const returnedState =
         String(
-          req.query.state || ''
+          req.query.state ||
+            ''
         );
 
       const savedState =
@@ -544,17 +744,26 @@ app.get(
         !code ||
         !returnedState ||
         !savedState ||
-        returnedState !== savedState
+        returnedState !==
+          savedState
       ) {
         console.error(
           'OAuth state mismatch',
           {
             hasCode:
-              Boolean(code),
+              Boolean(
+                code
+              ),
+
             hasReturnedState:
-              Boolean(returnedState),
+              Boolean(
+                returnedState
+              ),
+
             hasSavedState:
-              Boolean(savedState)
+              Boolean(
+                savedState
+              )
           }
         );
 
@@ -573,20 +782,29 @@ app.get(
         new URLSearchParams({
           grant_type:
             'authorization_code',
+
           code,
+
           redirect_uri:
             REDIRECT_URI
         })
       );
 
-      res.redirect('/');
-    } catch (error) {
-      console.error(error);
+      res.redirect(
+        '/'
+      );
+    } catch (
+      error
+    ) {
+      console.error(
+        error
+      );
 
       res
         .status(500)
         .send(
-          error instanceof Error
+          error instanceof
+            Error
             ? error.message
             : 'Authentication failed'
         );
@@ -602,11 +820,14 @@ app.post(
         TOKEN_FILE
       );
     } catch {
-      // No token file exists.
+      /*
+       * Nothing to remove.
+       */
     }
 
     res.json({
-      connected: false
+      connected:
+        false
     });
   }
 );
@@ -617,7 +838,10 @@ app.post(
 
 app.get(
   '/api/bootstrap',
-  async (_req, res) => {
+  async (
+    _req,
+    res
+  ) => {
     try {
       const [
         folders,
@@ -646,20 +870,36 @@ app.get(
           getAllCurrentTasks()
         ]);
 
-      const tags = [
-        ...new Set(
-          tasks.flatMap(task =>
-            (task.tag || '')
-              .split(',')
-              .map(tag =>
-                tag.trim()
-              )
-              .filter(Boolean)
+      const tags =
+        [
+          ...new Set(
+            tasks.flatMap(
+              task =>
+                (
+                  task.tag ||
+                  ''
+                )
+                  .split(
+                    ','
+                  )
+                  .map(
+                    tag =>
+                      tag.trim()
+                  )
+                  .filter(
+                    Boolean
+                  )
+            )
           )
-        )
-      ].sort((a, b) =>
-        a.localeCompare(b)
-      );
+        ].sort(
+          (
+            a,
+            b
+          ) =>
+            a.localeCompare(
+              b
+            )
+        );
 
       res.json({
         folders,
@@ -669,14 +909,19 @@ app.get(
         tags,
         tasks
       });
-    } catch (error) {
-      console.error(error);
+    } catch (
+      error
+    ) {
+      console.error(
+        error
+      );
 
       res
         .status(500)
         .json({
           error:
-            error instanceof Error
+            error instanceof
+              Error
               ? error.message
               : 'Could not load Toodledo data.'
         });
@@ -685,19 +930,28 @@ app.get(
 );
 
 /*
- * Complete a task
+ * Complete a task.
+ *
+ * reschedule belongs on the individual
+ * edited task. This is important for
+ * repeating Toodledo tasks.
  */
-
 app.post(
   '/api/tasks/:id/complete',
-  async (req, res) => {
+  async (
+    req,
+    res
+  ) => {
     try {
-      const id = Number(
-        req.params.id
-      );
+      const id =
+        Number(
+          req.params.id
+        );
 
       if (
-        !Number.isFinite(id)
+        !Number.isFinite(
+          id
+        )
       ) {
         return res
           .status(400)
@@ -712,22 +966,44 @@ app.post(
           'tasks/get.php',
           {
             id:
-              String(id),
+              String(
+                id
+              ),
 
             fields:
               TASK_FIELDS
           }
         );
 
-      const task = (
-        rawTasks as unknown[]
-      ).find(
-        (item: any) =>
-          item &&
-          Number(item.id) === id
-      ) as ToodledoTask | undefined;
+      if (
+        !Array.isArray(
+          rawTasks
+        )
+      ) {
+        throw new Error(
+          'Unexpected response from Toodledo task API.'
+        );
+      }
 
-      if (!task) {
+      const task =
+        (
+          rawTasks as
+            unknown[]
+        ).find(
+          (
+            item: any
+          ) =>
+            item &&
+            Number(
+              item.id
+            ) === id
+        ) as
+          | ToodledoTask
+          | undefined;
+
+      if (
+        !task
+      ) {
         return res
           .status(404)
           .json({
@@ -748,17 +1024,21 @@ app.post(
           duedate:
             task.duedate,
 
-          repeat:
-            task.repeat,
+          duetime:
+            task.duetime,
 
           duedatemod:
-            task.duedatemod
+            task.duedatemod,
+
+          repeat:
+            task.repeat
         }
       );
 
       const completed =
         Math.floor(
-          Date.now() / 1000
+          Date.now() /
+            1000
         );
 
       const result =
@@ -770,7 +1050,8 @@ app.post(
                 {
                   id,
                   completed,
-                  reschedule: 1
+                  reschedule:
+                    1
                 }
               ]),
 
@@ -781,18 +1062,27 @@ app.post(
 
       console.log(
         'Toodledo completion result',
-        JSON.stringify(result)
+        JSON.stringify(
+          result
+        )
       );
 
-      res.json(result);
-    } catch (error) {
-      console.error(error);
+      res.json(
+        result
+      );
+    } catch (
+      error
+    ) {
+      console.error(
+        error
+      );
 
       res
         .status(500)
         .json({
           error:
-            error instanceof Error
+            error instanceof
+              Error
               ? error.message
               : 'Could not complete task.'
         });
@@ -801,19 +1091,29 @@ app.post(
 );
 
 /*
- * Push / reset the due date of a task
+ * Push / reset the due date of a task.
+ *
+ * This changes the date directly rather
+ * than completing/rescheduling the task.
+ * The recurrence rule and due-date
+ * modifier are left untouched.
  */
-
 app.post(
   '/api/tasks/:id/push',
-  async (req, res) => {
+  async (
+    req,
+    res
+  ) => {
     try {
-      const id = Number(
-        req.params.id
-      );
+      const id =
+        Number(
+          req.params.id
+        );
 
       if (
-        !Number.isFinite(id)
+        !Number.isFinite(
+          id
+        )
       ) {
         return res
           .status(400)
@@ -825,59 +1125,81 @@ app.post(
 
       const destination =
         String(
-          req.body.destination || ''
+          req.body
+            .destination ||
+            ''
         );
 
       const today =
         new Date();
 
-      let duedate: number;
+      let duedate:
+        number;
 
-      switch (destination) {
+      switch (
+        destination
+      ) {
         case 'tomorrow': {
           const date =
-            new Date(today);
+            new Date(
+              today
+            );
 
           date.setDate(
-            date.getDate() + 1
+            date.getDate() +
+              1
           );
 
           duedate =
-            toToodledoDate(date);
+            toToodledoDate(
+              date
+            );
 
           break;
         }
 
         case 'week': {
           const date =
-            new Date(today);
+            new Date(
+              today
+            );
 
           date.setDate(
-            date.getDate() + 7
+            date.getDate() +
+              7
           );
 
           duedate =
-            toToodledoDate(date);
+            toToodledoDate(
+              date
+            );
 
           break;
         }
 
         case 'month': {
           const date =
-            new Date(today);
+            new Date(
+              today
+            );
 
           date.setMonth(
-            date.getMonth() + 1
+            date.getMonth() +
+              1
           );
 
           duedate =
-            toToodledoDate(date);
+            toToodledoDate(
+              date
+            );
 
           break;
         }
 
         case 'clear':
-          duedate = 0;
+          duedate =
+            0;
+
           break;
 
         default:
@@ -915,15 +1237,22 @@ app.post(
         }
       );
 
-      res.json(result);
-    } catch (error) {
-      console.error(error);
+      res.json(
+        result
+      );
+    } catch (
+      error
+    ) {
+      console.error(
+        error
+      );
 
       res
         .status(500)
         .json({
           error:
-            error instanceof Error
+            error instanceof
+              Error
               ? error.message
               : 'Could not push task.'
         });
@@ -932,7 +1261,7 @@ app.post(
 );
 
 /*
- * Serve React/Vite
+ * Serve the Vite build.
  */
 
 const distPath =
@@ -948,11 +1277,18 @@ app.use(
 );
 
 /*
- * Frontend fallback
+ * SPA fallback.
+ *
+ * Avoid Express "*" wildcard routes here;
+ * newer path-to-regexp versions reject
+ * that syntax.
  */
-
 app.use(
-  (req, res, next) => {
+  (
+    req,
+    res,
+    next
+  ) => {
     if (
       req.path.startsWith(
         '/api/'
@@ -971,12 +1307,15 @@ app.use(
 );
 
 /*
- * Unknown API endpoint
+ * Unknown API route.
  */
 
 app.use(
   '/api',
-  (_req, res) => {
+  (
+    _req,
+    res
+  ) => {
     res
       .status(404)
       .json({
@@ -987,7 +1326,7 @@ app.use(
 );
 
 /*
- * Start server
+ * Start server.
  */
 
 app.listen(

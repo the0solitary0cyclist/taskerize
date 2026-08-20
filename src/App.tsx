@@ -31,9 +31,7 @@ const PRIORITIES = [
   [3, 'Top']
 ] as const;
 
-const TIME_OPTIONS: Array<
-  [number, string]
-> = [
+const TIME_OPTIONS: Array<[number, string]> = [
   [10, '10 min'],
   [15, '15 min'],
   [30, '30 min'],
@@ -61,8 +59,7 @@ type PushDestination =
   | 'month'
   | 'clear';
 
-const emptyRule = <T,>():
-  IncludeExclude<T> => ({
+const emptyRule = <T,>(): IncludeExclude<T> => ({
   include: [],
   exclude: []
 });
@@ -80,19 +77,6 @@ const defaultFilters: Filters = {
   includeUnestimated: true
 };
 
-/*
- * This lets an existing browser migrate from
- * our original:
- *
- *   folderIds: [1, 2]
- *
- * format to:
- *
- *   folderIds: {
- *     include: [1, 2],
- *     exclude: []
- *   }
- */
 function normalizeRule<T>(
   value:
     | T[]
@@ -178,8 +162,7 @@ function loadFilters(): Filters {
           : null,
 
       includeUnestimated:
-        stored.includeUnestimated ===
-        false
+        stored.includeUnestimated === false
           ? false
           : true
     };
@@ -188,8 +171,7 @@ function loadFilters(): Filters {
   }
 }
 
-function loadDueDateFilters():
-  DueDateFilter[] {
+function loadDueDateFilters(): DueDateFilter[] {
   try {
     const stored =
       localStorage.getItem(
@@ -228,20 +210,10 @@ function matchesDueDateFilters(
   task: Task,
   filters: DueDateFilter[]
 ): boolean {
-  /*
-   * Nothing selected means:
-   * don't filter by due date.
-   *
-   * Undated tasks are therefore allowed.
-   */
   if (filters.length === 0) {
     return true;
   }
 
-  /*
-   * If a due-date category is selected,
-   * undated tasks do not match it.
-   */
   if (!task.duedate) {
     return false;
   }
@@ -265,30 +237,27 @@ function matchesDueDateFilters(
     sevenDaysAgo.getDate() - 7
   );
 
-  return filters.some(
-    filter => {
-      switch (filter) {
-        case 'today':
-          return (
-            dueDate.getTime() ===
-            today.getTime()
-          );
+  return filters.some(filter => {
+    switch (filter) {
+      case 'today':
+        return (
+          dueDate.getTime() ===
+          today.getTime()
+        );
 
-        case 'last7':
-          return (
-            dueDate < today &&
-            dueDate >=
-              sevenDaysAgo
-          );
+      case 'last7':
+        return (
+          dueDate < today &&
+          dueDate >= sevenDaysAgo
+        );
 
-        case 'overdue':
-          return dueDate < today;
+      case 'overdue':
+        return dueDate < today;
 
-        default:
-          return false;
-      }
+      default:
+        return false;
     }
-  );
+  });
 }
 
 function formatDueDate(
@@ -308,6 +277,175 @@ function formatDueDate(
       year: 'numeric'
     }
   );
+}
+
+function dueDateModifierLabel(
+  task: Task
+): string {
+  switch (task.duedatemod) {
+    case 1:
+      return 'Due On';
+
+    case 2:
+      return 'Due After';
+
+    case 3:
+      return 'Optional';
+
+    case 0:
+    default:
+      return 'Due By';
+  }
+}
+
+function formatDueTime(
+  task: Task
+): string | undefined {
+  if (!task.duetime) {
+    return undefined;
+  }
+
+  /*
+   * Toodledo's due-time value is a Unix
+   * timestamp. We only want its clock time.
+   */
+  return new Date(
+    task.duetime * 1000
+  ).toLocaleTimeString(
+    undefined,
+    {
+      hour: 'numeric',
+      minute: '2-digit'
+    }
+  );
+}
+
+function formatRepeat(
+  repeat?: string
+): string | undefined {
+  if (!repeat) {
+    return undefined;
+  }
+
+  const parts =
+    Object.fromEntries(
+      repeat
+        .split(';')
+        .map(part => {
+          const [
+            key,
+            value
+          ] =
+            part.split('=');
+
+          return [
+            key,
+            value
+          ];
+        })
+    );
+
+  const freq =
+    parts.FREQ;
+
+  const interval =
+    Number(
+      parts.INTERVAL || 1
+    );
+
+  const byDay =
+    parts.BYDAY
+      ?.split(',')
+      .map(day =>
+        day.trim()
+      )
+      .filter(Boolean);
+
+  const dayNames:
+    Record<string, string> = {
+      MO: 'Monday',
+      TU: 'Tuesday',
+      WE: 'Wednesday',
+      TH: 'Thursday',
+      FR: 'Friday',
+      SA: 'Saturday',
+      SU: 'Sunday'
+    };
+
+  if (
+    freq === 'DAILY'
+  ) {
+    if (
+      byDay?.length === 5 &&
+      [
+        'MO',
+        'TU',
+        'WE',
+        'TH',
+        'FR'
+      ].every(day =>
+        byDay.includes(day)
+      )
+    ) {
+      return 'Weekdays';
+    }
+
+    return interval === 1
+      ? 'Daily'
+      : `Every ${interval} days`;
+  }
+
+  if (
+    freq === 'WEEKLY'
+  ) {
+    if (
+      byDay &&
+      byDay.length > 0
+    ) {
+      const days =
+        byDay
+          .map(day =>
+            dayNames[day] ||
+            day
+          )
+          .join(', ');
+
+      if (
+        interval === 1
+      ) {
+        return `Every ${days}`;
+      }
+
+      return `Every ${interval} weeks on ${days}`;
+    }
+
+    return interval === 1
+      ? 'Weekly'
+      : `Every ${interval} weeks`;
+  }
+
+  if (
+    freq === 'MONTHLY'
+  ) {
+    return interval === 1
+      ? 'Monthly'
+      : `Every ${interval} months`;
+  }
+
+  if (
+    freq === 'YEARLY'
+  ) {
+    return interval === 1
+      ? 'Yearly'
+      : `Every ${interval} years`;
+  }
+
+  /*
+   * Preserve the original value if
+   * Toodledo gives us a rule we
+   * don't yet understand.
+   */
+  return repeat;
 }
 
 function getChoiceState<T>(
@@ -338,10 +476,6 @@ function setChoiceState<T>(
   state: ChoiceState,
   filter: IncludeExclude<T>
 ): IncludeExclude<T> {
-  /*
-   * Remove the value from either list
-   * before assigning its new state.
-   */
   const withoutValue = {
     include:
       filter.include.filter(
@@ -591,11 +725,6 @@ function App() {
         excludedIds
       );
 
-    /*
-     * Taskerize Again means:
-     * don't offer this task again
-     * during the current run.
-     */
     if (chosen) {
       nextExcluded.add(
         chosen.id
@@ -663,10 +792,6 @@ function App() {
         return;
       }
 
-      /*
-       * Redact this occurrence from
-       * the current Taskerize session.
-       */
       const nextExcluded =
         new Set(
           excludedIds
@@ -680,14 +805,6 @@ function App() {
         nextExcluded
       );
 
-      /*
-       * Re-fetch active tasks from
-       * Toodledo.
-       *
-       * This is necessary for
-       * repeating tasks, which may
-       * now have a new due date.
-       */
       const refreshed =
         await loadBootstrap();
 
@@ -722,8 +839,7 @@ function App() {
   }
 
   async function pushTask(
-    destination:
-      PushDestination
+    destination: PushDestination
   ) {
     if (!chosen) {
       return;
@@ -813,8 +929,7 @@ function App() {
         )
           ? current.filter(
               value =>
-                value !==
-                filter
+                value !== filter
             )
           : [
               ...current,
@@ -929,14 +1044,11 @@ function App() {
           </h2>
 
           <p className="hint">
-            Include means the
-            task must match one
-            of the included values
-            in that section.
-            Exclude always removes
-            matching tasks.
-            Any leaves that value
-            unrestricted.
+            Use + to include a
+            value and − to exclude
+            it. Click an active
+            icon again to return
+            it to neutral.
           </p>
 
           <DueDateFacet
@@ -962,8 +1074,7 @@ function App() {
             onChange={value =>
               setFilters({
                 ...filters,
-                folderIds:
-                  value
+                folderIds: value
               })
             }
             includeNone
@@ -980,8 +1091,7 @@ function App() {
             onChange={value =>
               setFilters({
                 ...filters,
-                contextIds:
-                  value
+                contextIds: value
               })
             }
             includeNone
@@ -1001,8 +1111,7 @@ function App() {
             onChange={value =>
               setFilters({
                 ...filters,
-                goalIds:
-                  value
+                goalIds: value
               })
             }
             includeNone
@@ -1019,8 +1128,7 @@ function App() {
             onChange={value =>
               setFilters({
                 ...filters,
-                locationIds:
-                  value
+                locationIds: value
               })
             }
             includeNone
@@ -1037,8 +1145,7 @@ function App() {
             onChange={value =>
               setFilters({
                 ...filters,
-                tags:
-                  value
+                tags: value
               })
             }
           />
@@ -1054,8 +1161,7 @@ function App() {
             onChange={value =>
               setFilters({
                 ...filters,
-                statuses:
-                  value
+                statuses: value
               })
             }
           />
@@ -1071,8 +1177,7 @@ function App() {
             onChange={value =>
               setFilters({
                 ...filters,
-                priorities:
-                  value
+                priorities: value
               })
             }
           />
@@ -1424,7 +1529,10 @@ function FilterChoice({
 }: {
   label: string;
   state: ChoiceState;
-  onChange: (state: ChoiceState) => void;
+
+  onChange: (
+    state: ChoiceState
+  ) => void;
 }) {
   return (
     <div className="filterChoice">
@@ -1486,7 +1594,6 @@ function Facet({
 }: {
   title: string;
   items: NamedItem[];
-
   filter:
     IncludeExclude<number>;
 
@@ -1502,7 +1609,6 @@ function Facet({
       ? [
           {
             id: 0,
-
             name:
               `No ${title.slice(
                 0,
@@ -1718,17 +1824,38 @@ function TaskMeta({
       task
     );
 
+  const dueTime =
+    formatDueTime(
+      task
+    );
+
+  const repeatLabel =
+    formatRepeat(
+      task.repeat
+    );
+
+  const dueLabel =
+    dueDate
+      ? [
+          dueDateModifierLabel(
+            task
+          ),
+          dueDate,
+          dueTime
+        ]
+          .filter(Boolean)
+          .join(' · ')
+      : undefined;
+
   const bits = [
     task.length
       ? `${task.length} min`
       : 'No estimate',
 
-    dueDate
-      ? `Due: ${dueDate}`
-      : undefined,
+    dueLabel,
 
-    task.repeat
-      ? `Repeats: ${task.repeat}`
+    repeatLabel
+      ? `Repeats: ${repeatLabel}`
       : undefined,
 
     name(
@@ -1741,6 +1868,16 @@ function TaskMeta({
       task.context
     ),
 
+    name(
+      data.goals,
+      task.goal
+    ),
+
+    name(
+      data.locations,
+      task.location
+    ),
+
     task.tag ||
       undefined
   ].filter(
@@ -1750,8 +1887,10 @@ function TaskMeta({
   return (
     <div className="meta">
       {bits.map(
-        bit => (
-          <span key={bit}>
+        (bit, index) => (
+          <span
+            key={`${bit}-${index}`}
+          >
             {bit}
           </span>
         )

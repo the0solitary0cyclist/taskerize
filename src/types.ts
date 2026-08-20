@@ -22,6 +22,7 @@ export type Task = {
   star?: number;
 
   duedate?: number;
+  duetime?: number;
   startdate?: number;
 
   repeat?: string;

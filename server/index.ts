@@ -576,18 +576,17 @@ app.post(
       const result = await toodledoPost(
         'tasks/edit.php',
         {
-          tasks: JSON.stringify([
-            {
-              id,
-              completed
-            }
-          ]),
-
-          /*
+                    /*
            * This tells Toodledo to create/reschedule
            * the next occurrence when appropriate.
            */
-          reschedule: '1',
+          tasks: JSON.stringify([
+            {
+              id,
+              completed,
+              reschedule: 1
+            }
+          ]),
 
           fields:
             'folder,context,goal,location,tag,status,priority,length,star,duedate,startdate,repeat,duedatemod'

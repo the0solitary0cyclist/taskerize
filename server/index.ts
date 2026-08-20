@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
+import cookieParser from 'cookie-parser';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -11,6 +12,7 @@ const appRoot = path.resolve(__dirname, '../..');
 
 const app = express();
 
+app.use(cookieParser());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -27,8 +29,6 @@ const TOKEN_FILE = path.join(
   appRoot,
   '.taskerize-tokens.json'
 );
-
-let oauthState: string | null = null;
 
 type Tokens = {
   access_token: string;
@@ -108,18 +108,23 @@ async function exchangeToken(
   );
 
   if (!response.ok) {
+    const text = await response.text();
+
     throw new Error(
-      `Token exchange failed (${response.status}).`
+      `Token exchange failed (${response.status}): ${text}`
     );
   }
 
   const data = (await response.json()) as
     Omit<Tokens, 'obtained_at'> & {
       error?: string;
+      error_description?: string;
     };
 
   if (data.error) {
-    throw new Error(data.error);
+    throw new Error(
+      data.error_description || data.error
+    );
   }
 
   return writeTokens(data);
@@ -129,7 +134,9 @@ async function getAccessToken(): Promise<string> {
   const tokens = readTokens();
 
   if (!tokens) {
-    throw new Error('Not connected to Toodledo.');
+    throw new Error(
+      'Not connected to Toodledo.'
+    );
   }
 
   const expiresAt =
@@ -154,7 +161,8 @@ async function toodledoGet(
   endpoint: string,
   params: Record<string, string> = {}
 ) {
-  const accessToken = await getAccessToken();
+  const accessToken =
+    await getAccessToken();
 
   const url = new URL(
     `https://api.toodledo.com/3/${endpoint}`
@@ -167,11 +175,15 @@ async function toodledoGet(
 
   Object.entries(params).forEach(
     ([key, value]) => {
-      url.searchParams.set(key, value);
+      url.searchParams.set(
+        key,
+        value
+      );
     }
   );
 
-  const response = await fetch(url);
+  const response =
+    await fetch(url);
 
   if (!response.ok) {
     throw new Error(
@@ -179,11 +191,13 @@ async function toodledoGet(
     );
   }
 
-  const data = await response.json();
+  const data =
+    await response.json();
 
   if (data?.errorCode) {
     throw new Error(
-      data.errorDesc || 'Toodledo API error'
+      data.errorDesc ||
+        'Toodledo API error'
     );
   }
 
@@ -194,24 +208,27 @@ async function toodledoPost(
   endpoint: string,
   params: Record<string, string>
 ) {
-  const accessToken = await getAccessToken();
+  const accessToken =
+    await getAccessToken();
 
-  const body = new URLSearchParams({
-    access_token: accessToken,
-    ...params
-  });
+  const body =
+    new URLSearchParams({
+      access_token: accessToken,
+      ...params
+    });
 
-  const response = await fetch(
-    `https://api.toodledo.com/3/${endpoint}`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type':
-          'application/x-www-form-urlencoded'
-      },
-      body
-    }
-  );
+  const response =
+    await fetch(
+      `https://api.toodledo.com/3/${endpoint}`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type':
+            'application/x-www-form-urlencoded'
+        },
+        body
+      }
+    );
 
   if (!response.ok) {
     throw new Error(
@@ -219,11 +236,13 @@ async function toodledoPost(
     );
   }
 
-  const data = await response.json();
+  const data =
+    await response.json();
 
   if (data?.errorCode) {
     throw new Error(
-      data.errorDesc || 'Toodledo API error'
+      data.errorDesc ||
+        'Toodledo API error'
     );
   }
 
@@ -234,54 +253,79 @@ async function toodledoPost(
  * Authentication
  */
 
-app.get('/api/auth/status', (_req, res) => {
-  res.json({
-    connected: Boolean(readTokens()),
-    configured: Boolean(
-      CLIENT_ID && CLIENT_SECRET
-    )
-  });
-});
-
-app.get('/api/auth/login', (_req, res) => {
-  if (!CLIENT_ID) {
-    return res
-      .status(500)
-      .send(
-        'TOODLEDO_CLIENT_ID is not configured.'
-      );
+app.get(
+  '/api/auth/status',
+  (_req, res) => {
+    res.json({
+      connected:
+        Boolean(readTokens()),
+      configured:
+        Boolean(
+          CLIENT_ID &&
+            CLIENT_SECRET
+        )
+    });
   }
+);
 
-  oauthState = crypto
-    .randomBytes(24)
-    .toString('hex');
+app.get(
+  '/api/auth/login',
+  (_req, res) => {
+    if (!CLIENT_ID) {
+      return res
+        .status(500)
+        .send(
+          'TOODLEDO_CLIENT_ID is not configured.'
+        );
+    }
 
-  const url = new URL(
-    'https://api.toodledo.com/3/account/authorize.php'
-  );
+    const state = crypto
+      .randomBytes(24)
+      .toString('hex');
 
-  url.searchParams.set(
-    'response_type',
-    'code'
-  );
+    res.cookie(
+      'toodledo_oauth_state',
+      state,
+      {
+        httpOnly: true,
+        secure:
+          process.env.NODE_ENV ===
+          'production',
+        sameSite: 'lax',
+        maxAge:
+          10 * 60 * 1000
+      }
+    );
 
-  url.searchParams.set(
-    'client_id',
-    CLIENT_ID
-  );
+    const url = new URL(
+      'https://api.toodledo.com/3/account/authorize.php'
+    );
 
-  url.searchParams.set(
-    'state',
-    oauthState
-  );
+    url.searchParams.set(
+      'response_type',
+      'code'
+    );
 
-  url.searchParams.set(
-    'scope',
-    'basic tasks write'
-  );
+    url.searchParams.set(
+      'client_id',
+      CLIENT_ID
+    );
 
-  res.redirect(url.toString());
-});
+    url.searchParams.set(
+      'state',
+      state
+    );
+
+    url.searchParams.set(
+      'scope',
+      'basic tasks write'
+    );
+
+    res.redirect(
+      url.toString()
+    );
+  }
+);
 
 app.get(
   '/api/auth/callback',
@@ -291,15 +335,37 @@ app.get(
         req.query.code || ''
       );
 
-      const state = String(
-        req.query.state || ''
-      );
+      const returnedState =
+        String(
+          req.query.state || ''
+        );
+
+      const savedState =
+        req.cookies
+          .toodledo_oauth_state;
 
       if (
         !code ||
-        !oauthState ||
-        state !== oauthState
+        !returnedState ||
+        !savedState ||
+        returnedState !== savedState
       ) {
+        console.error(
+          'OAuth state mismatch',
+          {
+            hasCode:
+              Boolean(code),
+            hasReturnedState:
+              Boolean(
+                returnedState
+              ),
+            hasSavedState:
+              Boolean(
+                savedState
+              )
+          }
+        );
+
         return res
           .status(400)
           .send(
@@ -307,19 +373,20 @@ app.get(
           );
       }
 
-      oauthState = null;
+      res.clearCookie(
+        'toodledo_oauth_state'
+      );
 
       await exchangeToken(
         new URLSearchParams({
           grant_type:
             'authorization_code',
           code,
-          redirect_uri: REDIRECT_URI
+          redirect_uri:
+            REDIRECT_URI
         })
       );
 
-      // On Heroku the React app and API
-      // are served by the same application.
       res.redirect('/');
     } catch (error) {
       console.error(error);
@@ -339,9 +406,11 @@ app.post(
   '/api/auth/disconnect',
   (_req, res) => {
     try {
-      fs.unlinkSync(TOKEN_FILE);
+      fs.unlinkSync(
+        TOKEN_FILE
+      );
     } catch {
-      // Nothing to delete.
+      // No token file exists.
     }
 
     res.json({
@@ -351,7 +420,7 @@ app.post(
 );
 
 /*
- * Toodledo data
+ * Toodledo bootstrap data
  */
 
 app.get(
@@ -364,44 +433,47 @@ app.get(
         goals,
         locations,
         rawTasks
-      ] = await Promise.all([
-        toodledoGet(
-          'folders/get.php'
-        ),
+      ] =
+        await Promise.all([
+          toodledoGet(
+            'folders/get.php'
+          ),
 
-        toodledoGet(
-          'contexts/get.php'
-        ),
+          toodledoGet(
+            'contexts/get.php'
+          ),
 
-        toodledoGet(
-          'goals/get.php'
-        ),
+          toodledoGet(
+            'goals/get.php'
+          ),
 
-        toodledoGet(
-          'locations/get.php'
-        ),
+          toodledoGet(
+            'locations/get.php'
+          ),
 
-        toodledoGet(
-          'tasks/get.php',
-          {
-            comp: '0',
-            num: '1000',
-            fields:
-              'folder,context,goal,location,tag,status,priority,length,star,repeat'
-          }
-        )
-      ]);
+          toodledoGet(
+            'tasks/get.php',
+            {
+              comp: '0',
+              num: '1000',
+              fields:
+                'folder,context,goal,location,tag,status,priority,length,star,repeat'
+            }
+          )
+        ]);
 
       /*
-       * Toodledo puts pagination
-       * information in the first object.
+       * Toodledo task responses may include
+       * metadata/pagination objects in addition
+       * to task objects.
        */
       const tasks = (
         rawTasks as unknown[]
       ).filter(
         (item: any) =>
           item &&
-          typeof item.id === 'number'
+          typeof item.id ===
+            'number'
       ) as ToodledoTask[];
 
       const tags = [
@@ -430,15 +502,21 @@ app.get(
     } catch (error) {
       console.error(error);
 
-      res.status(500).json({
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Could not load Toodledo data.'
-      });
+      res
+        .status(500)
+        .json({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Could not load Toodledo data.'
+        });
     }
   }
 );
+
+/*
+ * Complete a task
+ */
 
 app.post(
   '/api/tasks/:id/complete',
@@ -448,26 +526,33 @@ app.post(
         req.params.id
       );
 
-      if (!Number.isFinite(id)) {
-        return res.status(400).json({
-          error: 'Invalid task id.'
-        });
+      if (
+        !Number.isFinite(id)
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Invalid task id.'
+          });
       }
 
-      const completed = Math.floor(
-        Date.now() / 1000
-      );
+      const completed =
+        Math.floor(
+          Date.now() / 1000
+        );
 
       const result =
         await toodledoPost(
           'tasks/edit.php',
           {
-            tasks: JSON.stringify([
-              {
-                id,
-                completed
-              }
-            ]),
+            tasks:
+              JSON.stringify([
+                {
+                  id,
+                  completed
+                }
+              ]),
             reschedule: '1',
             fields:
               'folder,context,goal,location,tag,status,priority,length,star,repeat'
@@ -478,63 +563,107 @@ app.post(
     } catch (error) {
       console.error(error);
 
-      res.status(500).json({
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Could not complete task.'
-      });
+      res
+        .status(500)
+        .json({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Could not complete task.'
+        });
     }
   }
 );
 
 /*
- * Serve the React production build.
+ * Serve the React/Vite production build.
  *
- * Vite creates this directory when
- * `npm run build` runs.
+ * server/index.ts compiles to:
+ *
+ *   /app/server/dist/index.js
+ *
+ * Vite builds the frontend to:
+ *
+ *   /app/dist
+ *
+ * Therefore appRoot is two levels above
+ * __dirname.
  */
 
-const distPath = path.join(
-  appRoot,
-  'dist'
-);
+const distPath =
+  path.join(
+    appRoot,
+    'dist'
+  );
 
 app.use(
   express.static(distPath)
 );
 
 /*
- * Any request that isn't /api/*
- * should load React.
+ * Frontend fallback.
  *
- * This allows refreshing a frontend
- * route without Express returning 404.
+ * Do not use app.get('*', ...)
+ * here because newer Express /
+ * path-to-regexp versions reject
+ * the bare "*" route.
  */
 
-app.use((req, res, next) => {
-  if (req.path.startsWith('/api/')) {
-    return next();
-  }
+app.use(
+  (req, res, next) => {
+    if (
+      req.path.startsWith(
+        '/api/'
+      )
+    ) {
+      return next();
+    }
 
-  res.sendFile(
-    path.join(distPath, 'index.html')
-  );
-});
+    res.sendFile(
+      path.join(
+        distPath,
+        'index.html'
+      )
+    );
+  }
+);
+
+/*
+ * API fallback
+ */
+
+app.use(
+  '/api',
+  (_req, res) => {
+    res
+      .status(404)
+      .json({
+        error:
+          'API endpoint not found.'
+      });
+  }
+);
 
 /*
  * Start server.
  *
  * Heroku supplies process.env.PORT.
- * Locally it falls back to 3001.
+ * Local development falls back to 3001.
  */
 
-app.listen(PORT, () => {
-  console.log(
-    `Taskerize listening on port ${PORT}`
-  );
+app.listen(
+  PORT,
+  () => {
+    console.log(
+      `Taskerize listening on port ${PORT}`
+    );
 
-  console.log(
-    `OAuth redirect URI: ${REDIRECT_URI}`
-  );
-});
+    console.log(
+      `OAuth redirect URI: ${REDIRECT_URI}`
+    );
+
+    console.log(
+      `Frontend path: ${distPath}`
+    );
+  }
+);

@@ -12,6 +12,7 @@
   "dependencies": {
     "@vitejs/plugin-react": "latest",
     "concurrently": "latest",
+    "cookie-parser": "^1.4.7",
     "express": "latest",
     "react": "latest",
     "react-dom": "latest",
@@ -20,6 +21,7 @@
     "vite": "latest"
   },
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
     "@types/express": "latest",
     "@types/node": "latest",
     "@types/react": "latest",

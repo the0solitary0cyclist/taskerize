@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"vite\" \"tsx watch server/index.ts\"",
-    "build": "tsc -b && vite build",
-    "server": "tsx server/index.ts"
+    "server": "tsx server/index.ts",
+    "build": "vite build && tsc -p server/tsconfig.json",
+    "start": "node server/dist/index.js"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",

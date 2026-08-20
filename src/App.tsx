@@ -1424,67 +1424,53 @@ function FilterChoice({
 }: {
   label: string;
   state: ChoiceState;
-
-  onChange: (
-    state: ChoiceState
-  ) => void;
+  onChange: (state: ChoiceState) => void;
 }) {
   return (
     <div className="filterChoice">
-      <div className="filterChoiceLabel">
+      <span className="filterChoiceLabel">
         {label}
-      </div>
+      </span>
 
-      <div className="filterChoiceButtons">
+      <div className="filterChoiceIcons">
         <button
           type="button"
           className={
-            state ===
-            'neutral'
-              ? 'filterState active'
-              : 'filterState'
+            state === 'include'
+              ? 'filterIcon active'
+              : 'filterIcon'
           }
+          aria-label={`Include ${label}`}
+          title={`Include ${label}`}
           onClick={() =>
             onChange(
-              'neutral'
+              state === 'include'
+                ? 'neutral'
+                : 'include'
             )
           }
         >
-          Any
+          +
         </button>
 
         <button
           type="button"
           className={
-            state ===
-            'include'
-              ? 'filterState active include'
-              : 'filterState'
+            state === 'exclude'
+              ? 'filterIcon active exclude'
+              : 'filterIcon'
           }
+          aria-label={`Exclude ${label}`}
+          title={`Exclude ${label}`}
           onClick={() =>
             onChange(
-              'include'
+              state === 'exclude'
+                ? 'neutral'
+                : 'exclude'
             )
           }
         >
-          Include
-        </button>
-
-        <button
-          type="button"
-          className={
-            state ===
-            'exclude'
-              ? 'filterState active exclude'
-              : 'filterState'
-          }
-          onClick={() =>
-            onChange(
-              'exclude'
-            )
-          }
-        >
-          Exclude
+          −
         </button>
       </div>
     </div>

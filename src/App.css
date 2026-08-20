@@ -10,82 +10,88 @@
 
   color: white;
   background: black;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
 }
 
 * {
   box-sizing: border-box;
 }
 
-html {
-  background: black;
+html,
+body,
+#root {
+  min-height: 100%;
+  margin: 0;
 }
 
 body {
-  margin: 0;
-  min-width: 320px;
-  min-height: 100vh;
   background: black;
   color: white;
 }
 
 button,
+select,
 input {
   font: inherit;
 }
 
-button {
+button,
+select {
   cursor: pointer;
 }
 
+button:disabled,
+select:disabled {
+  cursor: not-allowed;
+}
+
 .shell {
-  max-width: 1180px;
+  width: min(1200px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 32px 24px 64px;
+  padding: 32px 0 60px;
   color: white;
 }
 
 header {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: start;
+  gap: 24px;
   margin-bottom: 24px;
-  color: white;
 }
 
 .brand {
+  font-size: 28px;
   font-weight: 900;
-  letter-spacing: 0.16em;
-  font-size: 14px;
-  color: white;
+  letter-spacing: 0.08em;
 }
 
 .subtitle {
+  margin: 4px 0 0;
   color: white;
+  opacity: 0.75;
 }
 
 .layout {
   display: grid;
-  grid-template-columns: 340px minmax(0, 1fr);
-  gap: 22px;
+  grid-template-columns: minmax(260px, 340px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
 }
 
 .mainColumn {
   display: grid;
-  gap: 22px;
-  align-content: start;
+  gap: 24px;
 }
 
-/*
- * All interior sections are white
- * with black text.
- */
 .panel {
   background: white;
   color: black;
   border: 1px solid white;
   border-radius: 18px;
   padding: 24px;
-  box-shadow: none;
 }
 
 .panel h1,
@@ -93,123 +99,203 @@ header {
 .panel h3,
 .panel p,
 .panel label,
-.panel summary {
+.panel summary,
+.panel span {
   color: black;
 }
 
-.panel h2 {
+.panel h1,
+.panel h2,
+.panel h3 {
   margin-top: 0;
 }
 
-.hint {
-  color: #444;
+.panel h2 {
+  margin-bottom: 12px;
 }
 
 .filters {
-  max-height: calc(100vh - 110px);
-  overflow: auto;
-  position: sticky;
-  top: 20px;
+  display: grid;
+  gap: 10px;
+}
+
+.hint {
+  margin: 0 0 8px;
+  font-size: 14px;
+  line-height: 1.45;
+  opacity: 0.7;
 }
 
 .facet {
-  border-top: 1px solid #ccc;
-  padding: 12px 0;
+  border-top: 1px solid #d8d8d8;
+  padding-top: 10px;
+}
+
+.facet:first-of-type {
+  border-top: 0;
 }
 
 .facet summary {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  font-weight: 750;
+  gap: 12px;
+
+  font-weight: 800;
   cursor: pointer;
-  color: black;
+  user-select: none;
 }
 
 .facet summary span {
-  color: #555;
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.55;
 }
 
 .facetBody {
   display: grid;
-  gap: 4px;
-  padding-top: 12px;
+  gap: 2px;
+  padding-top: 10px;
+}
+
+.filterChoice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+  padding: 3px 0;
+}
+
+.filterChoiceLabel {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.3;
+  color: black;
+}
+
+.filterChoiceIcons {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.filterIcon {
+  width: 26px;
+  height: 26px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  padding: 0;
+
+  border: 1px solid transparent;
+  border-radius: 50%;
+
+  background: transparent;
+  color: #777;
+
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+
+  transition:
+    background 120ms ease,
+    color 120ms ease,
+    border-color 120ms ease;
+}
+
+.filterIcon:hover {
+  border-color: black;
+  color: black;
+}
+
+.filterIcon.active {
+  background: black;
+  color: white;
+  border-color: black;
+}
+
+.filterIcon.active.exclude {
+  background: black;
+  color: white;
 }
 
 .check {
   display: flex;
-  gap: 8px;
   align-items: center;
+  gap: 8px;
   font-size: 14px;
-  color: black;
 }
 
 .check input {
-  accent-color: black;
+  margin: 0;
+}
+
+.timePanel {
+  display: grid;
+  gap: 16px;
 }
 
 .timeChoices {
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  gap: 8px;
 }
 
 .chip {
   border: 1px solid black;
   background: white;
   color: black;
+
   border-radius: 999px;
   padding: 8px 13px;
+
+  font-weight: 700;
 }
 
 .chip:hover {
-  background: #eee;
+  background: #eeeeee;
 }
 
 .chip.active {
   background: black;
   color: white;
-  border-color: black;
 }
 
 .chooser {
   text-align: center;
-  min-height: 420px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
 }
 
 .poolCount {
-  align-self: flex-end;
-  font-size: 13px;
-  color: #555;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  font-weight: 700;
+  opacity: 0.65;
 }
 
 .pickedLabel {
+  margin-bottom: 8px;
   font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  color: #555;
+  font-weight: 900;
+  letter-spacing: 0.12em;
 }
 
 .taskTitle {
-  max-width: 680px;
-  font-size: clamp(32px, 5vw, 58px);
-  line-height: 1.05;
-  margin: 18px 0;
-  color: black;
+  margin-bottom: 18px;
+  font-size: clamp(28px, 5vw, 48px);
+  line-height: 1.08;
 }
 
 .meta {
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
   justify-content: center;
-  margin-bottom: 28px;
+  gap: 8px;
+  margin: 18px 0 24px;
 }
 
 .meta span {
@@ -217,226 +303,196 @@ header {
   color: white;
   border-radius: 999px;
   padding: 6px 10px;
-  font-size: 13px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .actions {
   display: flex;
-  gap: 12px;
   flex-wrap: wrap;
-  justify-content: center;
   align-items: center;
+  justify-content: center;
+  gap: 12px;
 }
 
 .primary,
 .secondary,
 .button {
   border-radius: 12px;
-  padding: 13px 20px;
-  border: 1px solid black;
+  padding: 12px 18px;
   font-weight: 800;
   text-decoration: none;
-  display: inline-block;
 }
 
 .primary {
+  border: 1px solid black;
   background: black;
   color: white;
 }
 
-.primary:hover:not(:disabled) {
-  background: #222;
-}
-
-.primary:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
+.primary:hover {
+  opacity: 0.82;
 }
 
 .secondary {
+  border: 1px solid black;
   background: white;
   color: black;
-  border: 1px solid black;
 }
 
 .secondary:hover {
-  background: #eee;
+  background: #eeeeee;
+}
+
+.primary:disabled {
+  opacity: 0.3;
 }
 
 .giant {
-  margin-top: 24px;
-  padding: 22px 38px;
-  font-size: 22px;
-  letter-spacing: 0.08em;
+  width: 100%;
+  margin-top: 18px;
+  padding: 22px 24px;
+  font-size: 24px;
+  letter-spacing: 0.06em;
+}
+
+.pushSelect {
+  min-height: 44px;
+
+  border: 1px solid black;
+  border-radius: 12px;
+
+  background: white;
+  color: black;
+
+  padding: 10px 36px 10px 14px;
+
+  font-weight: 700;
+}
+
+.pushSelect:hover {
+  background: #eeeeee;
+}
+
+.pushSelect:disabled {
+  opacity: 0.4;
+}
+
+.message {
+  margin: 18px 0 0;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .linkButton {
   border: 0;
   background: transparent;
-  text-decoration: underline;
   color: white;
-  padding: 6px;
+
+  padding: 4px 0;
+
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .panel .linkButton {
   color: black;
 }
 
-.message {
-  color: black;
-  font-weight: 600;
+.linkButton:hover {
+  opacity: 0.7;
 }
 
 .warning {
-  background: white;
-  color: black;
-  border: 2px solid black;
-  padding: 12px;
-  border-radius: 10px;
+  font-weight: 700;
 }
 
 .welcome {
   max-width: 720px;
-  text-align: center;
-  padding-top: 18vh;
-  color: white;
-}
-
-.welcome .brand {
-  color: white;
+  padding-top: 80px;
 }
 
 .welcome h1 {
-  font-size: clamp(40px, 8vw, 76px);
-  line-height: 0.96;
-  margin-bottom: 20px;
-  color: white;
+  margin: 18px 0 12px;
+  font-size: clamp(40px, 8vw, 72px);
+  line-height: 0.98;
 }
 
 .welcome p {
+  max-width: 600px;
   font-size: 18px;
   line-height: 1.5;
-  color: white;
 }
 
-/*
- * The Connect Toodledo button sits directly
- * on the black page, so invert it:
- * white button, black lettering.
- */
 .welcome .primary,
 .welcome .button {
+  display: inline-block;
+
+  margin-top: 18px;
+
+  border-color: white;
   background: white;
   color: black;
-  border-color: white;
 }
 
 .welcome .primary:hover,
 .welcome .button:hover {
-  background: #ddd;
-}
-
-/*
- * Scrollbar styling for the filter panel.
- */
-.filters {
-  scrollbar-color: black white;
-  scrollbar-width: thin;
-}
-
-.filters::-webkit-scrollbar {
-  width: 10px;
-}
-
-.filters::-webkit-scrollbar-track {
-  background: white;
-}
-
-.filters::-webkit-scrollbar-thumb {
-  background: black;
-  border: 2px solid white;
-  border-radius: 999px;
-}
-
-.filterChoice {
-  display: grid;
-  gap: 8px;
-  padding: 10px 0;
-  border-bottom: 1px solid #ddd;
-}
-
-.filterChoice:last-child {
-  border-bottom: 0;
-}
-
-.filterChoiceLabel {
-  font-size: 14px;
-  font-weight: 600;
-  color: black;
-}
-
-.filterChoiceButtons {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.filterState {
-  border: 1px solid black;
-  background: white;
-  color: black;
-  border-radius: 999px;
-  padding: 5px 9px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.filterState:hover {
-  background: #eee;
-}
-
-.filterState.active {
-  background: black;
-  color: white;
-}
-
-.filterState.active.include {
-  background: black;
-  color: white;
-}
-
-.filterState.active.exclude {
-  background: black;
-  color: white;
-  text-decoration: line-through;
-}
-
-.pushSelect {
-  border: 1px solid black;
-  background: white;
-  color: black;
-  border-radius: 12px;
-  padding: 12px 14px;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.pushSelect:hover {
-  background: #eee;
-}
-
-.pushSelect:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
+  opacity: 0.85;
 }
 
 @media (max-width: 820px) {
+  .shell {
+    width: min(100% - 20px, 1200px);
+    padding-top: 20px;
+  }
+
+  header {
+    align-items: flex-start;
+  }
+
   .layout {
     grid-template-columns: 1fr;
   }
 
-  .filters {
-    position: static;
-    max-height: none;
+  .panel {
+    padding: 18px;
+  }
+}
+
+@media (max-width: 520px) {
+  .brand {
+    font-size: 23px;
+  }
+
+  .subtitle {
+    font-size: 13px;
+  }
+
+  .timeChoices {
+    gap: 6px;
+  }
+
+  .chip {
+    padding: 7px 10px;
+    font-size: 13px;
+  }
+
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .actions button,
+  .actions select {
+    width: 100%;
+  }
+
+  .filterChoice {
+    gap: 6px;
+  }
+
+  .filterChoiceLabel {
+    font-size: 13px;
   }
 }

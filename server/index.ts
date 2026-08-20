@@ -42,6 +42,7 @@ type ToodledoTask = {
   title: string;
   modified: number;
   completed: number;
+
   folder?: number;
   context?: number;
   goal?: number;
@@ -51,7 +52,11 @@ type ToodledoTask = {
   priority?: number;
   length?: number;
   star?: number;
+
+  duedate?: number;
+  startdate?: number;
   repeat?: string;
+  duedatemod?: number;
 };
 
 function readTokens(): Tokens | null {
@@ -457,7 +462,7 @@ app.get(
               comp: '0',
               num: '1000',
               fields:
-                'folder,context,goal,location,tag,status,priority,length,star,repeat'
+                'folder,context,goal,location,tag,status,priority,length,star,duedate,startdate,repeat,duedatemod'
             }
           )
         ]);
@@ -522,55 +527,88 @@ app.post(
   '/api/tasks/:id/complete',
   async (req, res) => {
     try {
-      const id = Number(
-        req.params.id
-      );
+      const id = Number(req.params.id);
 
-      if (
-        !Number.isFinite(id)
-      ) {
-        return res
-          .status(400)
-          .json({
-            error:
-              'Invalid task id.'
-          });
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({
+          error: 'Invalid task id.'
+        });
       }
 
-      const completed =
-        Math.floor(
-          Date.now() / 1000
-        );
+      /*
+       * Fetch the current task directly from Toodledo
+       * before completing it.
+       */
+      const rawTasks = await toodledoGet(
+        'tasks/get.php',
+        {
+          id: String(id),
+          fields:
+            'folder,context,goal,location,tag,status,priority,length,star,duedate,startdate,repeat,duedatemod'
+        }
+      );
 
-      const result =
-        await toodledoPost(
-          'tasks/edit.php',
-          {
-            tasks:
-              JSON.stringify([
-                {
-                  id,
-                  completed
-                }
-              ]),
-            reschedule: '1',
-            fields:
-              'folder,context,goal,location,tag,status,priority,length,star,repeat'
-          }
-        );
+      const task = (
+        rawTasks as unknown[]
+      ).find(
+        (item: any) =>
+          item &&
+          Number(item.id) === id
+      ) as ToodledoTask | undefined;
+
+      if (!task) {
+        return res.status(404).json({
+          error: 'Task not found in Toodledo.'
+        });
+      }
+
+      console.log('Completing task', {
+        id: task.id,
+        title: task.title,
+        duedate: task.duedate,
+        repeat: task.repeat,
+        duedatemod: task.duedatemod
+      });
+
+      const completed =
+        Math.floor(Date.now() / 1000);
+
+      const result = await toodledoPost(
+        'tasks/edit.php',
+        {
+          tasks: JSON.stringify([
+            {
+              id,
+              completed
+            }
+          ]),
+
+          /*
+           * This tells Toodledo to create/reschedule
+           * the next occurrence when appropriate.
+           */
+          reschedule: '1',
+
+          fields:
+            'folder,context,goal,location,tag,status,priority,length,star,duedate,startdate,repeat,duedatemod'
+        }
+      );
+
+      console.log(
+        'Toodledo completion result',
+        JSON.stringify(result)
+      );
 
       res.json(result);
     } catch (error) {
       console.error(error);
 
-      res
-        .status(500)
-        .json({
-          error:
-            error instanceof Error
-              ? error.message
-              : 'Could not complete task.'
-        });
+      res.status(500).json({
+        error:
+          error instanceof Error
+            ? error.message
+            : 'Could not complete task.'
+      });
     }
   }
 );

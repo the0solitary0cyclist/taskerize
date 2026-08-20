@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const root = path.resolve(__dirname, '..');
+
+const appRoot = path.resolve(__dirname, '../..');
 
 const app = express();
 
@@ -22,7 +23,10 @@ const REDIRECT_URI =
   process.env.TOODLEDO_REDIRECT_URI ||
   `http://localhost:${PORT}/api/auth/callback`;
 
-const TOKEN_FILE = path.join(root, '.taskerize-tokens.json');
+const TOKEN_FILE = path.join(
+  appRoot,
+  '.taskerize-tokens.json'
+);
 
 let oauthState: string | null = null;
 
@@ -492,7 +496,7 @@ app.post(
  */
 
 const distPath = path.join(
-  root,
+  appRoot,
   'dist'
 );
 

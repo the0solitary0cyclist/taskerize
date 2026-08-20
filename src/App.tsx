@@ -4,6 +4,7 @@ import { buildPool, randomTask } from './taskPool';
 import type {
   Bootstrap,
   Filters,
+  IncludeExclude,
   NamedItem,
   Task
 } from './types';
@@ -30,56 +31,195 @@ const PRIORITIES = [
   [3, 'Top']
 ] as const;
 
+const TIME_OPTIONS: Array<
+  [number, string]
+> = [
+  [10, '10 min'],
+  [15, '15 min'],
+  [30, '30 min'],
+  [45, '45 min'],
+  [60, '1h'],
+  [90, '1.5h'],
+  [120, '2h'],
+  [180, '3h'],
+  [240, '4h']
+];
+
 type DueDateFilter =
   | 'today'
   | 'last7'
   | 'overdue';
 
+type ChoiceState =
+  | 'neutral'
+  | 'include'
+  | 'exclude';
+
+type PushDestination =
+  | 'tomorrow'
+  | 'week'
+  | 'month'
+  | 'clear';
+
+const emptyRule = <T,>():
+  IncludeExclude<T> => ({
+  include: [],
+  exclude: []
+});
+
 const defaultFilters: Filters = {
-  folderIds: [],
-  contextIds: [],
-  goalIds: [],
-  locationIds: [],
-  tags: [],
-  statuses: [],
-  priorities: [],
+  folderIds: emptyRule<number>(),
+  contextIds: emptyRule<number>(),
+  goalIds: emptyRule<number>(),
+  locationIds: emptyRule<number>(),
+  tags: emptyRule<string>(),
+  statuses: emptyRule<number>(),
+  priorities: emptyRule<number>(),
   starredOnly: false,
   availableMinutes: null,
   includeUnestimated: true
 };
 
+/*
+ * This lets an existing browser migrate from
+ * our original:
+ *
+ *   folderIds: [1, 2]
+ *
+ * format to:
+ *
+ *   folderIds: {
+ *     include: [1, 2],
+ *     exclude: []
+ *   }
+ */
+function normalizeRule<T>(
+  value:
+    | T[]
+    | IncludeExclude<T>
+    | undefined
+): IncludeExclude<T> {
+  if (Array.isArray(value)) {
+    return {
+      include: value,
+      exclude: []
+    };
+  }
+
+  if (
+    value &&
+    Array.isArray(value.include) &&
+    Array.isArray(value.exclude)
+  ) {
+    return value;
+  }
+
+  return {
+    include: [],
+    exclude: []
+  };
+}
+
 function loadFilters(): Filters {
   try {
+    const stored = JSON.parse(
+      localStorage.getItem(
+        'taskerize-filters'
+      ) || '{}'
+    );
+
     return {
       ...defaultFilters,
-      ...JSON.parse(
-        localStorage.getItem('taskerize-filters') || '{}'
-      )
+
+      folderIds:
+        normalizeRule<number>(
+          stored.folderIds
+        ),
+
+      contextIds:
+        normalizeRule<number>(
+          stored.contextIds
+        ),
+
+      goalIds:
+        normalizeRule<number>(
+          stored.goalIds
+        ),
+
+      locationIds:
+        normalizeRule<number>(
+          stored.locationIds
+        ),
+
+      tags:
+        normalizeRule<string>(
+          stored.tags
+        ),
+
+      statuses:
+        normalizeRule<number>(
+          stored.statuses
+        ),
+
+      priorities:
+        normalizeRule<number>(
+          stored.priorities
+        ),
+
+      starredOnly:
+        Boolean(
+          stored.starredOnly
+        ),
+
+      availableMinutes:
+        typeof stored.availableMinutes ===
+          'number'
+          ? stored.availableMinutes
+          : null,
+
+      includeUnestimated:
+        stored.includeUnestimated ===
+        false
+          ? false
+          : true
     };
   } catch {
     return defaultFilters;
   }
 }
 
-function loadDueDateFilters(): DueDateFilter[] {
+function loadDueDateFilters():
+  DueDateFilter[] {
   try {
-    const stored = localStorage.getItem(
-      'taskerize-due-date-filters'
-    );
+    const stored =
+      localStorage.getItem(
+        'taskerize-due-date-filters'
+      );
 
     if (!stored) {
       return [];
     }
 
-    return JSON.parse(stored) as DueDateFilter[];
+    return JSON.parse(
+      stored
+    ) as DueDateFilter[];
   } catch {
     return [];
   }
 }
 
-function startOfDay(date: Date): Date {
-  const result = new Date(date);
-  result.setHours(0, 0, 0, 0);
+function startOfDay(
+  date: Date
+): Date {
+  const result =
+    new Date(date);
+
+  result.setHours(
+    0,
+    0,
+    0,
+    0
+  );
 
   return result;
 }
@@ -89,53 +229,71 @@ function matchesDueDateFilters(
   filters: DueDateFilter[]
 ): boolean {
   /*
-   * No due-date filter selected means
-   * "allow any due date", including no due date.
+   * Nothing selected means:
+   * don't filter by due date.
+   *
+   * Undated tasks are therefore allowed.
    */
   if (filters.length === 0) {
     return true;
   }
 
+  /*
+   * If a due-date category is selected,
+   * undated tasks do not match it.
+   */
   if (!task.duedate) {
     return false;
   }
 
-  const today = startOfDay(new Date());
+  const today =
+    startOfDay(
+      new Date()
+    );
 
-  const dueDate = startOfDay(
-    new Date(task.duedate * 1000)
-  );
+  const dueDate =
+    startOfDay(
+      new Date(
+        task.duedate * 1000
+      )
+    );
 
-  const sevenDaysAgo = new Date(today);
+  const sevenDaysAgo =
+    new Date(today);
 
   sevenDaysAgo.setDate(
     sevenDaysAgo.getDate() - 7
   );
 
-  return filters.some(filter => {
-    switch (filter) {
-      case 'today':
-        return (
-          dueDate.getTime() ===
-          today.getTime()
-        );
+  return filters.some(
+    filter => {
+      switch (filter) {
+        case 'today':
+          return (
+            dueDate.getTime() ===
+            today.getTime()
+          );
 
-      case 'last7':
-        return (
-          dueDate < today &&
-          dueDate >= sevenDaysAgo
-        );
+        case 'last7':
+          return (
+            dueDate < today &&
+            dueDate >=
+              sevenDaysAgo
+          );
 
-      case 'overdue':
-        return dueDate < today;
+        case 'overdue':
+          return dueDate < today;
 
-      default:
-        return false;
+        default:
+          return false;
+      }
     }
-  });
+  );
 }
 
-function formatDueDate(task: Task): string | undefined {
+function formatDueDate(
+  task: Task
+): string | undefined {
   if (!task.duedate) {
     return undefined;
   }
@@ -149,6 +307,90 @@ function formatDueDate(task: Task): string | undefined {
       day: 'numeric',
       year: 'numeric'
     }
+  );
+}
+
+function getChoiceState<T>(
+  value: T,
+  filter: IncludeExclude<T>
+): ChoiceState {
+  if (
+    filter.include.includes(
+      value
+    )
+  ) {
+    return 'include';
+  }
+
+  if (
+    filter.exclude.includes(
+      value
+    )
+  ) {
+    return 'exclude';
+  }
+
+  return 'neutral';
+}
+
+function setChoiceState<T>(
+  value: T,
+  state: ChoiceState,
+  filter: IncludeExclude<T>
+): IncludeExclude<T> {
+  /*
+   * Remove the value from either list
+   * before assigning its new state.
+   */
+  const withoutValue = {
+    include:
+      filter.include.filter(
+        item =>
+          item !== value
+      ),
+
+    exclude:
+      filter.exclude.filter(
+        item =>
+          item !== value
+      )
+  };
+
+  if (
+    state === 'include'
+  ) {
+    return {
+      ...withoutValue,
+
+      include: [
+        ...withoutValue.include,
+        value
+      ]
+    };
+  }
+
+  if (
+    state === 'exclude'
+  ) {
+    return {
+      ...withoutValue,
+
+      exclude: [
+        ...withoutValue.exclude,
+        value
+      ]
+    };
+  }
+
+  return withoutValue;
+}
+
+function filterCount<T>(
+  filter: IncludeExclude<T>
+): number {
+  return (
+    filter.include.length +
+    filter.exclude.length
   );
 }
 
@@ -166,48 +408,69 @@ function App() {
   const [
     data,
     setData
-  ] = useState<Bootstrap | null>(null);
+  ] =
+    useState<Bootstrap | null>(
+      null
+    );
 
   const [
     filters,
     setFilters
-  ] = useState<Filters>(loadFilters);
+  ] =
+    useState<Filters>(
+      loadFilters
+    );
 
   const [
     dueDateFilters,
     setDueDateFilters
-  ] = useState<DueDateFilter[]>(
-    loadDueDateFilters
-  );
+  ] =
+    useState<DueDateFilter[]>(
+      loadDueDateFilters
+    );
 
   const [
     excludedIds,
     setExcludedIds
-  ] = useState<Set<number>>(
-    new Set()
-  );
+  ] =
+    useState<Set<number>>(
+      new Set()
+    );
 
   const [
     chosen,
     setChosen
-  ] = useState<Task | null>(null);
+  ] =
+    useState<Task | null>(
+      null
+    );
 
   const [
     message,
     setMessage
-  ] = useState('');
+  ] =
+    useState('');
 
   const [
     loading,
     setLoading
-  ] = useState(true);
+  ] =
+    useState(true);
+
+  const [
+    pushing,
+    setPushing
+  ] =
+    useState(false);
 
   async function loadBootstrap() {
-    const response = await fetch(
-      '/api/bootstrap'
-    );
+    const response =
+      await fetch(
+        '/api/bootstrap'
+      );
 
-    const result = await response.json();
+    const result =
+      await response.json();
 
     if (
       !response.ok ||
@@ -225,23 +488,29 @@ function App() {
   }
 
   useEffect(() => {
-    fetch('/api/auth/status')
+    fetch(
+      '/api/auth/status'
+    )
       .then(response =>
         response.json()
       )
-      .then(async status => {
-        setConnected(
-          status.connected
-        );
+      .then(
+        async status => {
+          setConnected(
+            status.connected
+          );
 
-        setConfigured(
-          status.configured
-        );
+          setConfigured(
+            status.configured
+          );
 
-        if (status.connected) {
-          await loadBootstrap();
+          if (
+            status.connected
+          ) {
+            await loadBootstrap();
+          }
         }
-      })
+      )
       .catch(error => {
         setMessage(
           error instanceof Error
@@ -257,7 +526,9 @@ function App() {
   useEffect(() => {
     localStorage.setItem(
       'taskerize-filters',
-      JSON.stringify(filters)
+      JSON.stringify(
+        filters
+      )
     );
   }, [filters]);
 
@@ -270,29 +541,29 @@ function App() {
     );
   }, [dueDateFilters]);
 
-  const pool = useMemo(() => {
-    if (!data) {
-      return [];
-    }
+  const pool =
+    useMemo(() => {
+      if (!data) {
+        return [];
+      }
 
-    const basePool = buildPool(
-      data.tasks,
+      return buildPool(
+        data.tasks,
+        filters,
+        excludedIds
+      ).filter(
+        task =>
+          matchesDueDateFilters(
+            task,
+            dueDateFilters
+          )
+      );
+    }, [
+      data,
       filters,
-      excludedIds
-    );
-
-    return basePool.filter(task =>
-      matchesDueDateFilters(
-        task,
-        dueDateFilters
-      )
-    );
-  }, [
-    data,
-    filters,
-    excludedIds,
-    dueDateFilters
-  ]);
+      excludedIds,
+      dueDateFilters
+    ]);
 
   function buildCurrentPool(
     exclusions: Set<number>
@@ -305,21 +576,25 @@ function App() {
       data.tasks,
       filters,
       exclusions
-    ).filter(task =>
-      matchesDueDateFilters(
-        task,
-        dueDateFilters
-      )
+    ).filter(
+      task =>
+        matchesDueDateFilters(
+          task,
+          dueDateFilters
+        )
     );
   }
 
   function taskerize() {
     const nextExcluded =
-      new Set(excludedIds);
+      new Set(
+        excludedIds
+      );
 
     /*
-     * Taskerize Again excludes the current
-     * task for the rest of this session.
+     * Taskerize Again means:
+     * don't offer this task again
+     * during the current run.
      */
     if (chosen) {
       nextExcluded.add(
@@ -333,13 +608,17 @@ function App() {
       );
 
     const next =
-      randomTask(nextPool);
+      randomTask(
+        nextPool
+      );
 
     setExcludedIds(
       nextExcluded
     );
 
-    setChosen(next);
+    setChosen(
+      next
+    );
 
     setMessage(
       next
@@ -353,19 +632,21 @@ function App() {
       return;
     }
 
-    const completedTaskId = chosen.id;
+    const completedTaskId =
+      chosen.id;
 
     setMessage(
       'Completing in Toodledo…'
     );
 
     try {
-      const response = await fetch(
-        `/api/tasks/${completedTaskId}/complete`,
-        {
-          method: 'POST'
-        }
-      );
+      const response =
+        await fetch(
+          `/api/tasks/${completedTaskId}/complete`,
+          {
+            method: 'POST'
+          }
+        );
 
       const result =
         await response.json();
@@ -383,11 +664,13 @@ function App() {
       }
 
       /*
-      * Redact the completed task from
-      * this Taskerize session.
-      */
+       * Redact this occurrence from
+       * the current Taskerize session.
+       */
       const nextExcluded =
-        new Set(excludedIds);
+        new Set(
+          excludedIds
+        );
 
       nextExcluded.add(
         completedTaskId
@@ -398,34 +681,34 @@ function App() {
       );
 
       /*
-      * Reload directly from Toodledo.
-      *
-      * loadBootstrap() both updates `data`
-      * and returns the fresh Bootstrap object.
-      */
+       * Re-fetch active tasks from
+       * Toodledo.
+       *
+       * This is necessary for
+       * repeating tasks, which may
+       * now have a new due date.
+       */
       const refreshed =
         await loadBootstrap();
 
-      /*
-      * Explicitly calculate the remaining
-      * pool from the freshly loaded tasks.
-      */
       const refreshedPool =
         buildPool(
           refreshed.tasks,
           filters,
           nextExcluded
-        ).filter(task =>
-          matchesDueDateFilters(
-            task,
-            dueDateFilters
-          )
+        ).filter(
+          task =>
+            matchesDueDateFilters(
+              task,
+              dueDateFilters
+            )
         );
 
       setChosen(null);
 
       setMessage(
-        refreshedPool.length === 0
+        refreshedPool.length ===
+          0
           ? 'No more eligible tasks in this pool.'
           : 'Completed in Toodledo. Taskerize again when you’re ready.'
       );
@@ -438,27 +721,118 @@ function App() {
     }
   }
 
+  async function pushTask(
+    destination:
+      PushDestination
+  ) {
+    if (!chosen) {
+      return;
+    }
+
+    const pushedTaskId =
+      chosen.id;
+
+    setPushing(true);
+
+    setMessage(
+      'Updating due date in Toodledo…'
+    );
+
+    try {
+      const response =
+        await fetch(
+          `/api/tasks/${pushedTaskId}/push`,
+          {
+            method: 'POST',
+
+            headers: {
+              'Content-Type':
+                'application/json'
+            },
+
+            body:
+              JSON.stringify({
+                destination
+              })
+          }
+        );
+
+      const result =
+        await response.json();
+
+      if (
+        !response.ok ||
+        result.error
+      ) {
+        setMessage(
+          result.error ||
+            'Could not push task.'
+        );
+
+        return;
+      }
+
+      const nextExcluded =
+        new Set(
+          excludedIds
+        );
+
+      nextExcluded.add(
+        pushedTaskId
+      );
+
+      setExcludedIds(
+        nextExcluded
+      );
+
+      setChosen(null);
+
+      await loadBootstrap();
+
+      setMessage(
+        'Task pushed in Toodledo. Taskerize again when you’re ready.'
+      );
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Could not push task.'
+      );
+    } finally {
+      setPushing(false);
+    }
+  }
+
   function toggleDueDateFilter(
     filter: DueDateFilter
   ) {
-    setDueDateFilters(current =>
-      current.includes(filter)
-        ? current.filter(
-            value =>
-              value !== filter
-          )
-        : [
-            ...current,
-            filter
-          ]
+    setDueDateFilters(
+      current =>
+        current.includes(
+          filter
+        )
+          ? current.filter(
+              value =>
+                value !==
+                filter
+            )
+          : [
+              ...current,
+              filter
+            ]
     );
   }
 
   if (loading) {
     return (
       <main className="shell">
-        <h1>Taskerize</h1>
-        <p>Loading…</p>
+        <h1>
+          Taskerize
+        </h1>
+
+        <p>
+          Loading…
+        </p>
       </main>
     );
   }
@@ -476,15 +850,19 @@ function App() {
         </h1>
 
         <p>
-          Build a pool from your Toodledo tasks,
-          tell Taskerize how much time you have,
+          Build a pool from
+          your Toodledo tasks,
+          tell Taskerize how
+          much time you have,
           and let it pick.
         </p>
 
         {!configured && (
           <p className="warning">
-            Add your Toodledo client ID and secret
-            to the server environment first.
+            Add your Toodledo
+            client ID and secret
+            to the server
+            environment first.
           </p>
         )}
 
@@ -501,7 +879,9 @@ function App() {
   if (!data) {
     return (
       <main className="shell">
-        <h1>Taskerize</h1>
+        <h1>
+          Taskerize
+        </h1>
 
         <p>
           {message ||
@@ -549,12 +929,14 @@ function App() {
           </h2>
 
           <p className="hint">
-            Within a section,
-            selected values are OR.
-            Across sections,
-            they are AND.
-            Leave a section empty
-            to allow all.
+            Include means the
+            task must match one
+            of the included values
+            in that section.
+            Exclude always removes
+            matching tasks.
+            Any leaves that value
+            unrestricted.
           </p>
 
           <DueDateFacet
@@ -574,7 +956,7 @@ function App() {
                   !item.archived
               )
             }
-            selected={
+            filter={
               filters.folderIds
             }
             onChange={value =>
@@ -592,7 +974,7 @@ function App() {
             items={
               data.contexts
             }
-            selected={
+            filter={
               filters.contextIds
             }
             onChange={value =>
@@ -613,7 +995,7 @@ function App() {
                   !item.archived
               )
             }
-            selected={
+            filter={
               filters.goalIds
             }
             onChange={value =>
@@ -631,7 +1013,7 @@ function App() {
             items={
               data.locations
             }
-            selected={
+            filter={
               filters.locationIds
             }
             onChange={value =>
@@ -649,13 +1031,14 @@ function App() {
             items={
               data.tags
             }
-            selected={
+            filter={
               filters.tags
             }
             onChange={value =>
               setFilters({
                 ...filters,
-                tags: value
+                tags:
+                  value
               })
             }
           />
@@ -665,7 +1048,7 @@ function App() {
             items={
               STATUSES
             }
-            selected={
+            filter={
               filters.statuses
             }
             onChange={value =>
@@ -682,7 +1065,7 @@ function App() {
             items={
               PRIORITIES
             }
-            selected={
+            filter={
               filters.priorities
             }
             onChange={value =>
@@ -703,8 +1086,10 @@ function App() {
               onChange={event =>
                 setFilters({
                   ...filters,
+
                   starredOnly:
-                    event.target.checked
+                    event.target
+                      .checked
                 })
               }
             />
@@ -721,35 +1106,34 @@ function App() {
             </h2>
 
             <div className="timeChoices">
-              {[
-                10,
-                15,
-                30,
-                45,
-                60,
-                90
-              ].map(minutes => (
-                <button
-                  key={
-                    minutes
-                  }
-                  className={
-                    filters.availableMinutes ===
-                    minutes
-                      ? 'chip active'
-                      : 'chip'
-                  }
-                  onClick={() =>
-                    setFilters({
-                      ...filters,
-                      availableMinutes:
-                        minutes
-                    })
-                  }
-                >
-                  {minutes} min
-                </button>
-              ))}
+              {TIME_OPTIONS.map(
+                ([
+                  minutes,
+                  label
+                ]) => (
+                  <button
+                    key={
+                      minutes
+                    }
+                    className={
+                      filters.availableMinutes ===
+                      minutes
+                        ? 'chip active'
+                        : 'chip'
+                    }
+                    onClick={() =>
+                      setFilters({
+                        ...filters,
+
+                        availableMinutes:
+                          minutes
+                      })
+                    }
+                  >
+                    {label}
+                  </button>
+                )
+              )}
 
               <button
                 className={
@@ -761,12 +1145,13 @@ function App() {
                 onClick={() =>
                   setFilters({
                     ...filters,
+
                     availableMinutes:
                       null
                   })
                 }
               >
-                Any
+                All Day
               </button>
             </div>
 
@@ -779,13 +1164,16 @@ function App() {
                 onChange={event =>
                   setFilters({
                     ...filters,
+
                     includeUnestimated:
-                      event.target.checked
+                      event.target
+                        .checked
                   })
                 }
               />
 
-              Include tasks with no time estimate
+              Include tasks with
+              no time estimate
             </label>
           </div>
 
@@ -832,6 +1220,54 @@ function App() {
                   >
                     Taskerize again
                   </button>
+
+                  <select
+                    className="pushSelect"
+                    aria-label="Push task"
+                    disabled={
+                      pushing
+                    }
+                    defaultValue=""
+                    onChange={event => {
+                      const value =
+                        event.target
+                          .value as
+                          | PushDestination
+                          | '';
+
+                      if (value) {
+                        void pushTask(
+                          value
+                        );
+
+                        event.target.value =
+                          '';
+                      }
+                    }}
+                  >
+                    <option
+                      value=""
+                      disabled
+                    >
+                      Push task…
+                    </option>
+
+                    <option value="tomorrow">
+                      Tomorrow
+                    </option>
+
+                    <option value="week">
+                      +1 week
+                    </option>
+
+                    <option value="month">
+                      +1 month
+                    </option>
+
+                    <option value="clear">
+                      Clear due date
+                    </option>
+                  </select>
                 </div>
               </>
             ) : (
@@ -903,6 +1339,7 @@ function DueDateFacet({
   onToggle
 }: {
   selected: DueDateFilter[];
+
   onToggle: (
     value: DueDateFilter
   ) => void;
@@ -931,7 +1368,9 @@ function DueDateFacet({
               )
             }
             onChange={() =>
-              onToggle('today')
+              onToggle(
+                'today'
+              )
             }
           />
 
@@ -947,7 +1386,9 @@ function DueDateFacet({
               )
             }
             onChange={() =>
-              onToggle('last7')
+              onToggle(
+                'last7'
+              )
             }
           />
 
@@ -963,7 +1404,9 @@ function DueDateFacet({
               )
             }
             onChange={() =>
-              onToggle('overdue')
+              onToggle(
+                'overdue'
+              )
             }
           />
 
@@ -974,19 +1417,98 @@ function DueDateFacet({
   );
 }
 
+function FilterChoice({
+  label,
+  state,
+  onChange
+}: {
+  label: string;
+  state: ChoiceState;
+
+  onChange: (
+    state: ChoiceState
+  ) => void;
+}) {
+  return (
+    <div className="filterChoice">
+      <div className="filterChoiceLabel">
+        {label}
+      </div>
+
+      <div className="filterChoiceButtons">
+        <button
+          type="button"
+          className={
+            state ===
+            'neutral'
+              ? 'filterState active'
+              : 'filterState'
+          }
+          onClick={() =>
+            onChange(
+              'neutral'
+            )
+          }
+        >
+          Any
+        </button>
+
+        <button
+          type="button"
+          className={
+            state ===
+            'include'
+              ? 'filterState active include'
+              : 'filterState'
+          }
+          onClick={() =>
+            onChange(
+              'include'
+            )
+          }
+        >
+          Include
+        </button>
+
+        <button
+          type="button"
+          className={
+            state ===
+            'exclude'
+              ? 'filterState active exclude'
+              : 'filterState'
+          }
+          onClick={() =>
+            onChange(
+              'exclude'
+            )
+          }
+        >
+          Exclude
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function Facet({
   title,
   items,
-  selected,
+  filter,
   onChange,
   includeNone = false
 }: {
   title: string;
   items: NamedItem[];
-  selected: number[];
+
+  filter:
+    IncludeExclude<number>;
+
   onChange: (
-    value: number[]
+    value:
+      IncludeExclude<number>
   ) => void;
+
   includeNone?: boolean;
 }) {
   const all =
@@ -994,10 +1516,12 @@ function Facet({
       ? [
           {
             id: 0,
-            name: `No ${title.slice(
-              0,
-              -1
-            )}`
+
+            name:
+              `No ${title.slice(
+                0,
+                -1
+              )}`
           },
           ...items
         ]
@@ -1007,51 +1531,48 @@ function Facet({
     <details
       className="facet"
       open={
-        title === 'Folders'
+        title ===
+        'Folders'
       }
     >
       <summary>
         {title}
 
         <span>
-          {selected.length ||
-            'all'}
+          {filterCount(
+            filter
+          ) || 'all'}
         </span>
       </summary>
 
       <div className="facetBody">
-        {all.map(item => (
-          <label
-            className="check"
-            key={item.id}
-          >
-            <input
-              type="checkbox"
-              checked={
-                selected.includes(
-                  item.id
+        {all.map(
+          item => (
+            <FilterChoice
+              key={
+                item.id
+              }
+              label={
+                item.name
+              }
+              state={
+                getChoiceState(
+                  item.id,
+                  filter
                 )
               }
-              onChange={() =>
+              onChange={state =>
                 onChange(
-                  selected.includes(
-                    item.id
+                  setChoiceState(
+                    item.id,
+                    state,
+                    filter
                   )
-                    ? selected.filter(
-                        id =>
-                          id !== item.id
-                      )
-                    : [
-                        ...selected,
-                        item.id
-                      ]
                 )
               }
             />
-
-            {item.name}
-          </label>
-        ))}
+          )
+        )}
       </div>
     </details>
   );
@@ -1060,14 +1581,18 @@ function Facet({
 function StringFacet({
   title,
   items,
-  selected,
+  filter,
   onChange
 }: {
   title: string;
   items: string[];
-  selected: string[];
+
+  filter:
+    IncludeExclude<string>;
+
   onChange: (
-    value: string[]
+    value:
+      IncludeExclude<string>
   ) => void;
 }) {
   return (
@@ -1076,44 +1601,40 @@ function StringFacet({
         {title}
 
         <span>
-          {selected.length ||
-            'all'}
+          {filterCount(
+            filter
+          ) || 'all'}
         </span>
       </summary>
 
       <div className="facetBody">
-        {items.map(item => (
-          <label
-            className="check"
-            key={item}
-          >
-            <input
-              type="checkbox"
-              checked={
-                selected.includes(
-                  item
+        {items.map(
+          item => (
+            <FilterChoice
+              key={
+                item
+              }
+              label={
+                item
+              }
+              state={
+                getChoiceState(
+                  item,
+                  filter
                 )
               }
-              onChange={() =>
+              onChange={state =>
                 onChange(
-                  selected.includes(
-                    item
+                  setChoiceState(
+                    item,
+                    state,
+                    filter
                   )
-                    ? selected.filter(
-                        value =>
-                          value !== item
-                      )
-                    : [
-                        ...selected,
-                        item
-                      ]
                 )
               }
             />
-
-            {item}
-          </label>
-        ))}
+          )
+        )}
       </div>
     </details>
   );
@@ -1122,19 +1643,24 @@ function StringFacet({
 function NumberFacet({
   title,
   items,
-  selected,
+  filter,
   onChange
 }: {
   title: string;
+
   items: readonly (
     readonly [
       number,
       string
     ]
   )[];
-  selected: number[];
+
+  filter:
+    IncludeExclude<number>;
+
   onChange: (
-    value: number[]
+    value:
+      IncludeExclude<number>
   ) => void;
 }) {
   return (
@@ -1143,8 +1669,9 @@ function NumberFacet({
         {title}
 
         <span>
-          {selected.length ||
-            'all'}
+          {filterCount(
+            filter
+          ) || 'all'}
         </span>
       </summary>
 
@@ -1154,36 +1681,29 @@ function NumberFacet({
             value,
             label
           ]) => (
-            <label
-              className="check"
-              key={value}
-            >
-              <input
-                type="checkbox"
-                checked={
-                  selected.includes(
-                    value
+            <FilterChoice
+              key={
+                value
+              }
+              label={
+                label
+              }
+              state={
+                getChoiceState(
+                  value,
+                  filter
+                )
+              }
+              onChange={state =>
+                onChange(
+                  setChoiceState(
+                    value,
+                    state,
+                    filter
                   )
-                }
-                onChange={() =>
-                  onChange(
-                    selected.includes(
-                      value
-                    )
-                      ? selected.filter(
-                          item =>
-                            item !== value
-                        )
-                      : [
-                          ...selected,
-                          value
-                        ]
-                  )
-                }
-              />
-
-              {label}
-            </label>
+                )
+              }
+            />
           )
         )}
       </div>
@@ -1208,7 +1728,9 @@ function TaskMeta({
     )?.name;
 
   const dueDate =
-    formatDueDate(task);
+    formatDueDate(
+      task
+    );
 
   const bits = [
     task.length
@@ -1235,15 +1757,19 @@ function TaskMeta({
 
     task.tag ||
       undefined
-  ].filter(Boolean) as string[];
+  ].filter(
+    Boolean
+  ) as string[];
 
   return (
     <div className="meta">
-      {bits.map(bit => (
-        <span key={bit}>
-          {bit}
-        </span>
-      ))}
+      {bits.map(
+        bit => (
+          <span key={bit}>
+            {bit}
+          </span>
+        )
+      )}
     </div>
   );
 }

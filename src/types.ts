@@ -37,15 +37,25 @@ export type Bootstrap = {
   tasks: Task[];
 };
 
+export type IncludeExclude<T> = {
+  include: T[];
+  exclude: T[];
+};
+
 export type Filters = {
-  folderIds: number[];
-  contextIds: number[];
-  goalIds: number[];
-  locationIds: number[];
-  tags: string[];
-  statuses: number[];
-  priorities: number[];
+  folderIds: IncludeExclude<number>;
+  contextIds: IncludeExclude<number>;
+  goalIds: IncludeExclude<number>;
+  locationIds: IncludeExclude<number>;
+
+  tags: IncludeExclude<string>;
+
+  statuses: IncludeExclude<number>;
+  priorities: IncludeExclude<number>;
+
   starredOnly: boolean;
+
   availableMinutes: number | null;
+
   includeUnestimated: boolean;
 };

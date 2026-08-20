@@ -108,13 +108,11 @@ async function exchangeToken(
     'https://api.toodledo.com/3/account/token.php',
     {
       method: 'POST',
-
       headers: {
         Authorization: `Basic ${auth}`,
         'Content-Type':
           'application/x-www-form-urlencoded'
       },
-
       body: params
     }
   );
@@ -235,12 +233,10 @@ async function toodledoPost(
     `https://api.toodledo.com/3/${endpoint}`,
     {
       method: 'POST',
-
       headers: {
         'Content-Type':
           'application/x-www-form-urlencoded'
       },
-
       body
     }
   );
@@ -287,10 +283,6 @@ function isNotFutureTask(
 
   const today = new Date();
 
-  /*
-   * Compare local calendar dates rather
-   * than precise timestamps.
-   */
   const dueDay = new Date(
     dueDate.getFullYear(),
     dueDate.getMonth(),
@@ -310,15 +302,15 @@ function isNotFutureTask(
 }
 
 /*
- * Toodledo returns at most 1000 tasks per
- * tasks/get.php request.
+ * Toodledo returns at most 1000 tasks
+ * in one tasks/get.php request.
  *
- * We must page through ALL incomplete tasks,
- * because useful overdue/today tasks might
- * occur after the first 1000 results.
+ * We therefore page through every
+ * incomplete task and keep only:
  *
- * Future tasks are discarded as each page
- * is processed.
+ * - overdue
+ * - due today
+ * - undated
  */
 async function getAllCurrentTasks():
   Promise<ToodledoTask[]> {
@@ -356,9 +348,6 @@ async function getAllCurrentTasks():
       );
     }
 
-    /*
-     * The first result is Toodledo metadata.
-     */
     const metadata =
       rawTasks[0] as {
         num?: number;
@@ -405,27 +394,14 @@ async function getAllCurrentTasks():
       }
     );
 
-    /*
-     * If no actual tasks came back,
-     * stop rather than risk looping.
-     */
     if (
       pageTasks.length === 0
     ) {
       break;
     }
 
-    /*
-     * Advance by the number of API records
-     * requested, not the number retained.
-     */
     start += pageSize;
 
-    /*
-     * If the API did not provide a total,
-     * a short page means we've reached
-     * the end.
-     */
     if (
       total === null &&
       pageTasks.length <
@@ -446,6 +422,26 @@ async function getAllCurrentTasks():
   );
 
   return relevantTasks;
+}
+
+/*
+ * Convert a local calendar date into
+ * the noon-UTC Unix timestamp format
+ * expected by Toodledo for due dates.
+ */
+function toToodledoDate(
+  date: Date
+): number {
+  return Math.floor(
+    Date.UTC(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      12,
+      0,
+      0
+    ) / 1000
+  );
 }
 
 /*
@@ -488,13 +484,10 @@ app.get(
       state,
       {
         httpOnly: true,
-
         secure:
           process.env.NODE_ENV ===
           'production',
-
         sameSite: 'lax',
-
         maxAge:
           10 * 60 * 1000
       }
@@ -558,16 +551,10 @@ app.get(
           {
             hasCode:
               Boolean(code),
-
             hasReturnedState:
-              Boolean(
-                returnedState
-              ),
-
+              Boolean(returnedState),
             hasSavedState:
-              Boolean(
-                savedState
-              )
+              Boolean(savedState)
           }
         );
 
@@ -586,9 +573,7 @@ app.get(
         new URLSearchParams({
           grant_type:
             'authorization_code',
-
           code,
-
           redirect_uri:
             REDIRECT_URI
         })
@@ -627,7 +612,7 @@ app.post(
 );
 
 /*
- * Bootstrap data
+ * Bootstrap
  */
 
 app.get(
@@ -661,11 +646,6 @@ app.get(
           getAllCurrentTasks()
         ]);
 
-      /*
-       * Tags do not have their own API
-       * endpoint, so derive them from the
-       * tasks available to Taskerize.
-       */
       const tags = [
         ...new Set(
           tasks.flatMap(task =>
@@ -727,10 +707,6 @@ app.post(
           });
       }
 
-      /*
-       * Fetch the current task directly
-       * from Toodledo before editing it.
-       */
       const rawTasks =
         await toodledoGet(
           'tasks/get.php',
@@ -785,10 +761,6 @@ app.post(
           Date.now() / 1000
         );
 
-      /*
-       * reschedule must be part of the
-       * individual task edit object.
-       */
       const result =
         await toodledoPost(
           'tasks/edit.php',
@@ -829,6 +801,137 @@ app.post(
 );
 
 /*
+ * Push / reset the due date of a task
+ */
+
+app.post(
+  '/api/tasks/:id/push',
+  async (req, res) => {
+    try {
+      const id = Number(
+        req.params.id
+      );
+
+      if (
+        !Number.isFinite(id)
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Invalid task id.'
+          });
+      }
+
+      const destination =
+        String(
+          req.body.destination || ''
+        );
+
+      const today =
+        new Date();
+
+      let duedate: number;
+
+      switch (destination) {
+        case 'tomorrow': {
+          const date =
+            new Date(today);
+
+          date.setDate(
+            date.getDate() + 1
+          );
+
+          duedate =
+            toToodledoDate(date);
+
+          break;
+        }
+
+        case 'week': {
+          const date =
+            new Date(today);
+
+          date.setDate(
+            date.getDate() + 7
+          );
+
+          duedate =
+            toToodledoDate(date);
+
+          break;
+        }
+
+        case 'month': {
+          const date =
+            new Date(today);
+
+          date.setMonth(
+            date.getMonth() + 1
+          );
+
+          duedate =
+            toToodledoDate(date);
+
+          break;
+        }
+
+        case 'clear':
+          duedate = 0;
+          break;
+
+        default:
+          return res
+            .status(400)
+            .json({
+              error:
+                'Invalid push destination.'
+            });
+      }
+
+      const result =
+        await toodledoPost(
+          'tasks/edit.php',
+          {
+            tasks:
+              JSON.stringify([
+                {
+                  id,
+                  duedate
+                }
+              ]),
+
+            fields:
+              TASK_FIELDS
+          }
+        );
+
+      console.log(
+        'Pushed task',
+        {
+          id,
+          destination,
+          duedate
+        }
+      );
+
+      res.json(result);
+    } catch (error) {
+      console.error(error);
+
+      res
+        .status(500)
+        .json({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Could not push task.'
+        });
+    }
+  }
+);
+
+/*
  * Serve React/Vite
  */
 
@@ -839,12 +942,15 @@ const distPath =
   );
 
 app.use(
-  express.static(distPath)
+  express.static(
+    distPath
+  )
 );
 
 /*
- * Frontend fallback.
+ * Frontend fallback
  */
+
 app.use(
   (req, res, next) => {
     if (

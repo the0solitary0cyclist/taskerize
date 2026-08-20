@@ -132,7 +132,7 @@ header {
 
 .facetBody {
   display: grid;
-  gap: 8px;
+  gap: 4px;
   padding-top: 12px;
 }
 
@@ -225,6 +225,7 @@ header {
   gap: 12px;
   flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
 }
 
 .primary,
@@ -355,6 +356,78 @@ header {
   background: black;
   border: 2px solid white;
   border-radius: 999px;
+}
+
+.filterChoice {
+  display: grid;
+  gap: 8px;
+  padding: 10px 0;
+  border-bottom: 1px solid #ddd;
+}
+
+.filterChoice:last-child {
+  border-bottom: 0;
+}
+
+.filterChoiceLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: black;
+}
+
+.filterChoiceButtons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filterState {
+  border: 1px solid black;
+  background: white;
+  color: black;
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.filterState:hover {
+  background: #eee;
+}
+
+.filterState.active {
+  background: black;
+  color: white;
+}
+
+.filterState.active.include {
+  background: black;
+  color: white;
+}
+
+.filterState.active.exclude {
+  background: black;
+  color: white;
+  text-decoration: line-through;
+}
+
+.pushSelect {
+  border: 1px solid black;
+  background: white;
+  color: black;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.pushSelect:hover {
+  background: #eee;
+}
+
+.pushSelect:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 @media (max-width: 820px) {

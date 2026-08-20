@@ -353,8 +353,7 @@ function App() {
       return;
     }
 
-    const completedTaskId =
-      chosen.id;
+    const completedTaskId = chosen.id;
 
     setMessage(
       'Completing in Toodledo…'
@@ -384,36 +383,51 @@ function App() {
       }
 
       /*
-       * Reload from Toodledo instead of
-       * deleting the task locally.
-       *
-       * This is especially important for
-       * recurring tasks, because Toodledo
-       * may have rescheduled the same task
-       * to its next occurrence.
-       */
-      await loadBootstrap();
+      * Redact the completed task from
+      * this Taskerize session.
+      */
+      const nextExcluded =
+        new Set(excludedIds);
+
+      nextExcluded.add(
+        completedTaskId
+      );
+
+      setExcludedIds(
+        nextExcluded
+      );
 
       /*
-       * Prevent the newly rescheduled task
-       * from immediately being picked again
-       * during this Taskerize session.
-       */
-      setExcludedIds(previous => {
-        const next =
-          new Set(previous);
+      * Reload directly from Toodledo.
+      *
+      * loadBootstrap() both updates `data`
+      * and returns the fresh Bootstrap object.
+      */
+      const refreshed =
+        await loadBootstrap();
 
-        next.add(
-          completedTaskId
+      /*
+      * Explicitly calculate the remaining
+      * pool from the freshly loaded tasks.
+      */
+      const refreshedPool =
+        buildPool(
+          refreshed.tasks,
+          filters,
+          nextExcluded
+        ).filter(task =>
+          matchesDueDateFilters(
+            task,
+            dueDateFilters
+          )
         );
-
-        return next;
-      });
 
       setChosen(null);
 
       setMessage(
-        'Completed in Toodledo. Taskerize again when you’re ready.'
+        refreshedPool.length === 0
+          ? 'No more eligible tasks in this pool.'
+          : 'Completed in Toodledo. Taskerize again when you’re ready.'
       );
     } catch (error) {
       setMessage(

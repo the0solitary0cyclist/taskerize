@@ -508,18 +508,13 @@ app.use(
  * route without Express returning 404.
  */
 
-app.get('*', (req, res, next) => {
-  if (
-    req.path.startsWith('/api/')
-  ) {
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/')) {
     return next();
   }
 
   res.sendFile(
-    path.join(
-      distPath,
-      'index.html'
-    )
+    path.join(distPath, 'index.html')
   );
 });
 

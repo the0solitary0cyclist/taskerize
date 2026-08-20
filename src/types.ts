@@ -1,19 +1,31 @@
-export type NamedItem = { id: number; name: string; archived?: number };
+export type NamedItem = {
+  id: number;
+  name: string;
+  archived?: number;
+};
+
 export type Task = {
   id: number;
   title: string;
   modified: number;
   completed: number;
+
   folder?: number;
   context?: number;
   goal?: number;
   location?: number;
+
   tag?: string;
   status?: number;
   priority?: number;
   length?: number;
   star?: number;
+
+  duedate?: number;
+  startdate?: number;
+
   repeat?: string;
+  duedatemod?: number;
 };
 
 export type Bootstrap = {

@@ -47,6 +47,7 @@ type ToodledoTask = {
   context?: number;
   goal?: number;
   location?: number;
+
   tag?: string;
   status?: number;
   priority?: number;
@@ -55,6 +56,7 @@ type ToodledoTask = {
 
   duedate?: number;
   startdate?: number;
+
   repeat?: string;
   duedatemod?: number;
 };
@@ -103,11 +105,13 @@ async function exchangeToken(
     'https://api.toodledo.com/3/account/token.php',
     {
       method: 'POST',
+
       headers: {
         Authorization: `Basic ${auth}`,
         'Content-Type':
           'application/x-www-form-urlencoded'
       },
+
       body: params
     }
   );
@@ -128,7 +132,8 @@ async function exchangeToken(
 
   if (data.error) {
     throw new Error(
-      data.error_description || data.error
+      data.error_description ||
+        data.error
     );
   }
 
@@ -155,7 +160,8 @@ async function getAccessToken(): Promise<string> {
   const refreshed = await exchangeToken(
     new URLSearchParams({
       grant_type: 'refresh_token',
-      refresh_token: tokens.refresh_token
+      refresh_token:
+        tokens.refresh_token
     })
   );
 
@@ -191,8 +197,10 @@ async function toodledoGet(
     await fetch(url);
 
   if (!response.ok) {
+    const text = await response.text();
+
     throw new Error(
-      `Toodledo request failed (${response.status}).`
+      `Toodledo request failed (${response.status}): ${text}`
     );
   }
 
@@ -227,17 +235,21 @@ async function toodledoPost(
       `https://api.toodledo.com/3/${endpoint}`,
       {
         method: 'POST',
+
         headers: {
           'Content-Type':
             'application/x-www-form-urlencoded'
         },
+
         body
       }
     );
 
   if (!response.ok) {
+    const text = await response.text();
+
     throw new Error(
-      `Toodledo request failed (${response.status}).`
+      `Toodledo request failed (${response.status}): ${text}`
     );
   }
 
@@ -264,6 +276,7 @@ app.get(
     res.json({
       connected:
         Boolean(readTokens()),
+
       configured:
         Boolean(
           CLIENT_ID &&
@@ -293,10 +306,13 @@ app.get(
       state,
       {
         httpOnly: true,
+
         secure:
           process.env.NODE_ENV ===
           'production',
+
         sameSite: 'lax',
+
         maxAge:
           10 * 60 * 1000
       }
@@ -360,10 +376,12 @@ app.get(
           {
             hasCode:
               Boolean(code),
+
             hasReturnedState:
               Boolean(
                 returnedState
               ),
+
             hasSavedState:
               Boolean(
                 savedState
@@ -386,7 +404,9 @@ app.get(
         new URLSearchParams({
           grant_type:
             'authorization_code',
+
           code,
+
           redirect_uri:
             REDIRECT_URI
         })
@@ -425,7 +445,7 @@ app.post(
 );
 
 /*
- * Toodledo bootstrap data
+ * Bootstrap data
  */
 
 app.get(
@@ -460,7 +480,9 @@ app.get(
             'tasks/get.php',
             {
               comp: '0',
+
               num: '1000',
+
               fields:
                 'folder,context,goal,location,tag,status,priority,length,star,duedate,startdate,repeat,duedatemod'
             }
@@ -468,9 +490,8 @@ app.get(
         ]);
 
       /*
-       * Toodledo task responses may include
-       * metadata/pagination objects in addition
-       * to task objects.
+       * The Toodledo response may include
+       * metadata along with actual task objects.
        */
       const tasks = (
         rawTasks as unknown[]
@@ -481,6 +502,11 @@ app.get(
             'number'
       ) as ToodledoTask[];
 
+      /*
+       * Tags don't have their own endpoint,
+       * so derive the available tags from
+       * active tasks.
+       */
       const tags = [
         ...new Set(
           tasks.flatMap(task =>
@@ -527,26 +553,39 @@ app.post(
   '/api/tasks/:id/complete',
   async (req, res) => {
     try {
-      const id = Number(req.params.id);
+      const id = Number(
+        req.params.id
+      );
 
-      if (!Number.isFinite(id)) {
-        return res.status(400).json({
-          error: 'Invalid task id.'
-        });
+      if (
+        !Number.isFinite(id)
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              'Invalid task id.'
+          });
       }
 
       /*
-       * Fetch the current task directly from Toodledo
-       * before completing it.
+       * Fetch the task directly from Toodledo
+       * immediately before completing it.
+       *
+       * This gives us current recurrence and
+       * due-date information instead of relying
+       * on potentially stale frontend data.
        */
-      const rawTasks = await toodledoGet(
-        'tasks/get.php',
-        {
-          id: String(id),
-          fields:
-            'folder,context,goal,location,tag,status,priority,length,star,duedate,startdate,repeat,duedatemod'
-        }
-      );
+      const rawTasks =
+        await toodledoGet(
+          'tasks/get.php',
+          {
+            id: String(id),
+
+            fields:
+              'folder,context,goal,location,tag,status,priority,length,star,duedate,startdate,repeat,duedatemod'
+          }
+        );
 
       const task = (
         rawTasks as unknown[]
@@ -557,74 +596,94 @@ app.post(
       ) as ToodledoTask | undefined;
 
       if (!task) {
-        return res.status(404).json({
-          error: 'Task not found in Toodledo.'
-        });
+        return res
+          .status(404)
+          .json({
+            error:
+              'Task not found in Toodledo.'
+          });
       }
 
-      console.log('Completing task', {
-        id: task.id,
-        title: task.title,
-        duedate: task.duedate,
-        repeat: task.repeat,
-        duedatemod: task.duedatemod
-      });
-
-      const completed =
-        Math.floor(Date.now() / 1000);
-
-      const result = await toodledoPost(
-        'tasks/edit.php',
+      console.log(
+        'Completing task',
         {
-                    /*
-           * This tells Toodledo to create/reschedule
-           * the next occurrence when appropriate.
-           */
-          tasks: JSON.stringify([
-            {
-              id,
-              completed,
-              reschedule: 1
-            }
-          ]),
+          id:
+            task.id,
 
-          fields:
-            'folder,context,goal,location,tag,status,priority,length,star,duedate,startdate,repeat,duedatemod'
+          title:
+            task.title,
+
+          duedate:
+            task.duedate,
+
+          repeat:
+            task.repeat,
+
+          duedatemod:
+            task.duedatemod
         }
       );
 
+      const completed =
+        Math.floor(
+          Date.now() / 1000
+        );
+
+      /*
+       * IMPORTANT:
+       *
+       * reschedule belongs inside the task
+       * edit object.
+       *
+       * For a repeating task such as
+       * FREQ=DAILY, Toodledo should advance
+       * the task to its next occurrence while
+       * preserving the completed occurrence
+       * in its history.
+       */
+      const result =
+        await toodledoPost(
+          'tasks/edit.php',
+          {
+            tasks:
+              JSON.stringify([
+                {
+                  id,
+                  completed,
+                  reschedule: 1
+                }
+              ]),
+
+            fields:
+              'folder,context,goal,location,tag,status,priority,length,star,duedate,startdate,repeat,duedatemod'
+          }
+        );
+
       console.log(
         'Toodledo completion result',
-        JSON.stringify(result)
+        JSON.stringify(
+          result
+        )
       );
 
       res.json(result);
     } catch (error) {
       console.error(error);
 
-      res.status(500).json({
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Could not complete task.'
-      });
+      res
+        .status(500)
+        .json({
+          error:
+            error instanceof Error
+              ? error.message
+              : 'Could not complete task.'
+        });
     }
   }
 );
 
 /*
- * Serve the React/Vite production build.
- *
- * server/index.ts compiles to:
- *
- *   /app/server/dist/index.js
- *
- * Vite builds the frontend to:
- *
- *   /app/dist
- *
- * Therefore appRoot is two levels above
- * __dirname.
+ * Serve React/Vite
  */
 
 const distPath =
@@ -640,12 +699,10 @@ app.use(
 /*
  * Frontend fallback.
  *
- * Do not use app.get('*', ...)
- * here because newer Express /
- * path-to-regexp versions reject
- * the bare "*" route.
+ * app.get('*') is deliberately avoided
+ * because the newer path-to-regexp used
+ * by Express rejects a bare wildcard.
  */
-
 app.use(
   (req, res, next) => {
     if (
@@ -666,7 +723,7 @@ app.use(
 );
 
 /*
- * API fallback
+ * Unknown API endpoint
  */
 
 app.use(
@@ -682,10 +739,7 @@ app.use(
 );
 
 /*
- * Start server.
- *
- * Heroku supplies process.env.PORT.
- * Local development falls back to 3001.
+ * Start server
  */
 
 app.listen(

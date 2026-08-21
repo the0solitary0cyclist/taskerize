@@ -281,7 +281,14 @@ function formatDueDate(
 
 function dueDateModifierLabel(
   task: Task
-): string {
+): string | undefined {
+  if (
+    task.duedatemod === 3 &&
+    task.repeat
+  ) {
+    return undefined;
+  }
+
   switch (task.duedatemod) {
     case 1:
       return 'Due On';
@@ -305,17 +312,17 @@ function formatDueTime(
     return undefined;
   }
 
-  /*
-   * Toodledo's due-time value is a Unix
-   * timestamp. We only want its clock time.
-   */
-  return new Date(
-    task.duetime * 1000
-  ).toLocaleTimeString(
+  const date =
+    new Date(
+      task.duetime * 1000
+    );
+
+  return date.toLocaleTimeString(
     undefined,
     {
       hour: 'numeric',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'UTC'
     }
   );
 }
@@ -1306,6 +1313,18 @@ function App() {
                   task={chosen}
                   data={data}
                 />
+
+                {chosen.note?.trim() && (
+                  <details className="taskNotes">
+                    <summary>
+                      Notes
+                    </summary>
+
+                    <div className="taskNotesBody">
+                      {chosen.note}
+                    </div>
+                  </details>
+                )}
 
                 <div className="actions">
                   <button

@@ -62,7 +62,7 @@ const TOKEN_FILE =
   );
 
 const TASK_FIELDS =
-  'folder,context,goal,location,tag,status,priority,length,star,duedate,duetime,startdate,repeat,duedatemod';
+  'folder,context,goal,location,tag,status,priority,length,star,duedate,duetime,startdate,repeat,duedatemod,note';
 
 type Tokens = {
   access_token: string;
@@ -94,6 +94,8 @@ type ToodledoTask = {
 
   repeat?: string;
   duedatemod?: number;
+
+  note?: string;
 };
 
 function readTokens():

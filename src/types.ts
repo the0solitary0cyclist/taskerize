@@ -27,6 +27,8 @@ export type Task = {
 
   repeat?: string;
   duedatemod?: number;
+
+  note?: string;
 };
 
 export type Bootstrap = {

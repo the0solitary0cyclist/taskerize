@@ -89,27 +89,84 @@ function matchesTimeFilter(
   task: Task,
   filters: Filters
 ): boolean {
-  const maxMinutes =
+  const selectedMinutes =
     filters.availableMinutes;
-
-  /*
-   * "All Day" / null means
-   * no upper time limit.
-   */
-  if (maxMinutes === null) {
-    return true;
-  }
 
   /*
    * Toodledo uses 0 / missing length
    * for an unestimated task.
+   *
+   * Unestimated tasks can appear in
+   * any time bucket when the checkbox
+   * is enabled.
    */
   if (!task.length) {
     return filters.includeUnestimated;
   }
 
+  /*
+   * All Day is represented by null.
+   *
+   * It now means tasks longer than
+   * our largest ordinary bucket:
+   * more than 4 hours / 240 minutes.
+   */
+  if (selectedMinutes === null) {
+    return task.length > 240;
+  }
+
+  const timeBoundaries = [
+    10,
+    15,
+    30,
+    45,
+    60,
+    90,
+    120,
+    180,
+    240
+  ];
+
+  const index =
+    timeBoundaries.indexOf(
+      selectedMinutes
+    );
+
+  /*
+   * This shouldn't normally happen,
+   * but reject an unknown time option
+   * rather than applying the wrong
+   * range.
+   */
+  if (index === -1) {
+    return false;
+  }
+
+  /*
+   * The first bucket has no lower
+   * boundary:
+   *
+   * 10 min => <= 10
+   *
+   * Every later bucket starts just
+   * above the previous boundary:
+   *
+   * 15 min => > 10 and <= 15
+   * 30 min => > 15 and <= 30
+   * etc.
+   */
+  const lowerBound =
+    index === 0
+      ? 0
+      : timeBoundaries[
+          index - 1
+        ];
+
   return (
-    task.length <= maxMinutes
+    task.length >
+      lowerBound &&
+    task.length <=
+      selectedMinutes
   );
 }
 

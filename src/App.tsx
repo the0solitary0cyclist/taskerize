@@ -156,8 +156,8 @@ function loadFilters(): Filters {
         ),
 
       availableMinutes:
-        typeof stored.availableMinutes ===
-          'number'
+        typeof stored.availableMinutes === 'number' ||
+        stored.availableMinutes === 'all-day'
           ? stored.availableMinutes
           : null,
 
@@ -1218,53 +1218,46 @@ function App() {
             </h2>
 
             <div className="timeChoices">
-              {TIME_OPTIONS.map(
-                ([
-                  minutes,
-                  label
-                ]) => (
-                  <button
-                    key={
-                      minutes
-                    }
-                    className={
-                      filters.availableMinutes ===
-                      minutes
-                        ? 'chip active'
-                        : 'chip'
-                    }
-                    onClick={() =>
-                      setFilters({
-                        ...filters,
+              {TIME_OPTIONS.map(([minutes, label]) => (
+                <button
+                  key={minutes}
+                  className={
+                    filters.availableMinutes === minutes
+                      ? 'chip active'
+                      : 'chip'
+                  }
+                  onClick={() =>
+                    setFilters({
+                      ...filters,
+                      availableMinutes:
+                        filters.availableMinutes === minutes
+                          ? null
+                          : minutes
+                    })
+                  }
+                >
+                  {label}
+                </button>
+              ))}
 
-                        availableMinutes:
-                          minutes
-                      })
-                    }
-                  >
-                    {label}
-                  </button>
-                )
-              )}
-
-              <button
-                className={
-                  filters.availableMinutes ===
-                  null
-                    ? 'chip active'
-                    : 'chip'
-                }
-                onClick={() =>
-                  setFilters({
-                    ...filters,
-
-                    availableMinutes:
-                      null
-                  })
-                }
-              >
-                All Day
-              </button>
+            <button
+              className={
+                filters.availableMinutes === 'all-day'
+                  ? 'chip active'
+                  : 'chip'
+              }
+              onClick={() =>
+                setFilters({
+                  ...filters,
+                  availableMinutes:
+                    filters.availableMinutes === 'all-day'
+                      ? null
+                      : 'all-day'
+                })
+              }
+            >
+              All Day
+            </button>
             </div>
 
             <label className="check">

@@ -58,7 +58,7 @@ export type Filters = {
 
   starredOnly: boolean;
 
-  availableMinutes: number | null;
+  availableMinutes: number | 'all-day' | null;
 
   includeUnestimated: boolean;
 };

@@ -89,30 +89,40 @@ function matchesTimeFilter(
   task: Task,
   filters: Filters
 ): boolean {
-  const selectedMinutes =
+  const selectedTime =
     filters.availableMinutes;
 
+  const hasEstimate =
+    Boolean(task.length);
+
   /*
-   * Toodledo uses 0 / missing length
-   * for an unestimated task.
+   * No time bucket selected.
    *
-   * Unestimated tasks can appear in
-   * any time bucket when the checkbox
-   * is enabled.
+   * Estimated tasks of any length
+   * are eligible.
+   *
+   * Unestimated tasks are eligible
+   * only when enabled.
    */
-  if (!task.length) {
+  if (selectedTime === null) {
+    return hasEstimate
+      ? true
+      : filters.includeUnestimated;
+  }
+
+  /*
+   * Unestimated tasks may join any
+   * selected bucket when enabled.
+   */
+  if (!hasEstimate) {
     return filters.includeUnestimated;
   }
 
   /*
-   * All Day is represented by null.
-   *
-   * It now means tasks longer than
-   * our largest ordinary bucket:
-   * more than 4 hours / 240 minutes.
+   * Explicit All Day bucket.
    */
-  if (selectedMinutes === null) {
-    return task.length > 240;
+  if (selectedTime === 'all-day') {
+    return task.length! > 240;
   }
 
   const timeBoundaries = [
@@ -129,44 +139,21 @@ function matchesTimeFilter(
 
   const index =
     timeBoundaries.indexOf(
-      selectedMinutes
+      selectedTime
     );
 
-  /*
-   * This shouldn't normally happen,
-   * but reject an unknown time option
-   * rather than applying the wrong
-   * range.
-   */
   if (index === -1) {
     return false;
   }
 
-  /*
-   * The first bucket has no lower
-   * boundary:
-   *
-   * 10 min => <= 10
-   *
-   * Every later bucket starts just
-   * above the previous boundary:
-   *
-   * 15 min => > 10 and <= 15
-   * 30 min => > 15 and <= 30
-   * etc.
-   */
   const lowerBound =
     index === 0
       ? 0
-      : timeBoundaries[
-          index - 1
-        ];
+      : timeBoundaries[index - 1];
 
   return (
-    task.length >
-      lowerBound &&
-    task.length <=
-      selectedMinutes
+    task.length! > lowerBound &&
+    task.length! <= selectedTime
   );
 }
 
